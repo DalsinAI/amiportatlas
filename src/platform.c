@@ -50,31 +50,31 @@ static int iface(struct Library *base, struct Interface **out)
     *out = GetInterface(base, "main", 1, NULL);
     return *out != NULL;
 }
-#define OPEN(base, name, ver, ifc) \
+#define AP_OPEN(base, name, ver, ifc) \
     ((base = (void *)OpenLibrary(name, ver)) != NULL && iface((struct Library *)base, (struct Interface **)&ifc))
-#define CLOSE(base, ifc) do { if (ifc) DropInterface((struct Interface *)ifc); ifc = NULL; \
+#define AP_CLOSE(base, ifc) do { if (ifc) DropInterface((struct Interface *)ifc); ifc = NULL; \
     if (base) CloseLibrary((struct Library *)base); base = NULL; } while (0)
 #else
-#define OPEN(base, name, ver, ifc) ((base = (void *)OpenLibrary(name, ver)) != NULL)
-#define CLOSE(base, ifc) do { if (base) CloseLibrary((struct Library *)base); base = NULL; } while (0)
+#define AP_OPEN(base, name, ver, ifc) ((base = (void *)OpenLibrary(name, ver)) != NULL)
+#define AP_CLOSE(base, ifc) do { if (base) CloseLibrary((struct Library *)base); base = NULL; } while (0)
 #endif
 
 int platform_open(const char **missing)
 {
     /* Version 39 (3.0) for GadTools listview hooks; workbench.library 44 for
      * OpenWorkbenchObjectA(). 3.2, AROS and 4.1 all have them. */
-    if (!OPEN(IntuitionBase, "intuition.library", 39, IIntuition)) { *missing = "intuition.library 39"; return 0; }
-    if (!OPEN(GfxBase, "graphics.library", 39, IGraphics)) { *missing = "graphics.library 39"; return 0; }
-    if (!OPEN(GadToolsBase, "gadtools.library", 39, IGadTools)) { *missing = "gadtools.library 39"; return 0; }
-    if (!OPEN(DataTypesBase, "datatypes.library", 39, IDataTypes)) { *missing = "datatypes.library 39"; return 0; }
-    if (!OPEN(WorkbenchBase, "workbench.library", 44, IWorkbench)) { *missing = "workbench.library 44"; return 0; }
-    if (!OPEN(AslBase, "asl.library", 39, IAsl)) { *missing = "asl.library 39"; return 0; }
+    if (!AP_OPEN(IntuitionBase, "intuition.library", 39, IIntuition)) { *missing = "intuition.library 39"; return 0; }
+    if (!AP_OPEN(GfxBase, "graphics.library", 39, IGraphics)) { *missing = "graphics.library 39"; return 0; }
+    if (!AP_OPEN(GadToolsBase, "gadtools.library", 39, IGadTools)) { *missing = "gadtools.library 39"; return 0; }
+    if (!AP_OPEN(DataTypesBase, "datatypes.library", 39, IDataTypes)) { *missing = "datatypes.library 39"; return 0; }
+    if (!AP_OPEN(WorkbenchBase, "workbench.library", 44, IWorkbench)) { *missing = "workbench.library 44"; return 0; }
+    if (!AP_OPEN(AslBase, "asl.library", 39, IAsl)) { *missing = "asl.library 39"; return 0; }
     return 1;
 }
 
 int platform_open_net(const char **why)
 {
-    if (!SocketBase && !OPEN(SocketBase, "bsdsocket.library", 4, ISocket)) {
+    if (!SocketBase && !AP_OPEN(SocketBase, "bsdsocket.library", 4, ISocket)) {
         *why = "No TCP/IP stack is running (bsdsocket.library could not be opened).";
         return 0;
     }
@@ -96,13 +96,13 @@ void platform_close(void)
     if (GFOpenTLSBase) CloseLibrary(GFOpenTLSBase);
     GFOpenTLSBase = NULL;
 #endif
-    CLOSE(SocketBase, ISocket);
-    CLOSE(AslBase, IAsl);
-    CLOSE(WorkbenchBase, IWorkbench);
-    CLOSE(DataTypesBase, IDataTypes);
-    CLOSE(GadToolsBase, IGadTools);
-    CLOSE(GfxBase, IGraphics);
-    CLOSE(IntuitionBase, IIntuition);
+    AP_CLOSE(SocketBase, ISocket);
+    AP_CLOSE(AslBase, IAsl);
+    AP_CLOSE(WorkbenchBase, IWorkbench);
+    AP_CLOSE(DataTypesBase, IDataTypes);
+    AP_CLOSE(GadToolsBase, IGadTools);
+    AP_CLOSE(GfxBase, IGraphics);
+    AP_CLOSE(IntuitionBase, IIntuition);
 }
 
 void platform_hook(struct Hook *h, HookFn fn, APTR data)

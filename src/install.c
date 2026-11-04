@@ -182,7 +182,7 @@ static void join(char *out, int max, const char *a, const char *b)
 
 static int unpack(const char *archive, const char *dest)
 {
-    char cmd[600];
+    char cmd[700];
     if (exists("SYS:Utilities/OpenCompress")) {
         snprintf(cmd, sizeof cmd, "SYS:Utilities/OpenCompress x \"%s\" \"%s/\"", archive, dest);
         if (platform_run(cmd) == 0) return 1;
@@ -203,7 +203,7 @@ static void tidy(const char *dir, const char *archive)
 int install_run(const Port *p, const char *parent, StepFn step, HttpSink progress,
                 void *user, char *why, int whylen)
 {
-    char archive[300], dir[300], script[300], dest[300], cmd[900];
+    char archive[300], dir[300], script[300], dest[300], cmd[1400];
     BPTR l;
     LONG rc;
 
