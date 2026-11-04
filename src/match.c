@@ -188,23 +188,35 @@ int match_version(const char *ver, char *out, int max)
     }
 }
 
+/* The first number run of a version, digits and dots: "1.6.0 RC2" gives
+ * "1.6.0", "test 4 (git d4b94bb)" gives "4"; how long it is */
+static int number_run(const char **v)
+{
+    const char *s = *v;
+    int n = 0;
+    while (*s && !(*s >= '0' && *s <= '9')) s++;
+    *v = s;
+    while ((s[n] >= '0' && s[n] <= '9') || (s[n] == '.' && s[n + 1] >= '0' && s[n + 1] <= '9')) n++;
+    return n;
+}
+
 int version_cmp(const char *a, const char *b)
 {
-    int seen = 0;
+    const char *ea, *eb;
     if (!a || !b) return 0;
-    while (*a && *b) {
-        unsigned long x = 0, y = 0;
-        int dx = 0, dy = 0;
-        while (*a && !(*a >= '0' && *a <= '9')) a++;
-        while (*b && !(*b >= '0' && *b <= '9')) b++;
-        while (*a >= '0' && *a <= '9') { x = x * 10 + (unsigned long)(*a++ - '0'); dx = 1; }
-        while (*b >= '0' && *b <= '9') { y = y * 10 + (unsigned long)(*b++ - '0'); dy = 1; }
-        if (!dx || !dy) break;
-        seen = 1;
-        if (x != y) return x < y ? -1 : 1;
+    {
+        int na = number_run(&a), nb = number_run(&b);
+        ea = a + na;
+        eb = b + nb;
     }
-    if (!seen) return 0;
-    while (*a && !(*a >= '0' && *a <= '9')) a++;
-    while (*b && !(*b >= '0' && *b <= '9')) b++;
-    return *a ? 1 : *b ? -1 : 0;                    /* 1.2 before 1.2.1 */
+    if (a == ea || b == eb) return 0;
+    while (a < ea && b < eb) {
+        unsigned long x = 0, y = 0;
+        while (a < ea && *a != '.') x = x * 10 + (unsigned long)(*a++ - '0');
+        while (b < eb && *b != '.') y = y * 10 + (unsigned long)(*b++ - '0');
+        if (x != y) return x < y ? -1 : 1;
+        if (a < ea) a++;
+        if (b < eb) b++;
+    }
+    return a < ea ? 1 : b < eb ? -1 : 0;           /* 1.2 before 1.2.1 */
 }

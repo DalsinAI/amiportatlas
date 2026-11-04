@@ -185,6 +185,8 @@ static void test_match(Feed *f)
         CHECK(!match_version("$VER: meritous (03.11.2026)", v, sizeof v));
         CHECK(version_cmp("1.9", "1.10") < 0 && version_cmp("1.10", "1.9") > 0 && version_cmp("1.2", "1.2.1") < 0);
         CHECK(version_cmp("1.15.1", "1.15.1") == 0 && version_cmp("unknown", "1.0") == 0 && version_cmp("1.1d", "1.1") == 0);
+        CHECK(version_cmp("1.6.0", "1.6.0 RC2") == 0 && version_cmp("2.30", "2.30 test 4") == 0 &&
+              version_cmp("1.5", "1.6.0 RC2") < 0 && version_cmp("0.1.0", "0.1.0 alpha 1") == 0);
     }
     matcher_free(m);
     free(list);
