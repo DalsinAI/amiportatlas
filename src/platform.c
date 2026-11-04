@@ -32,7 +32,7 @@ struct GfxBase *GfxBase;
 struct Library *GadToolsBase, *DataTypesBase, *WorkbenchBase, *AslBase;
 struct Library *SocketBase;
 #ifdef AP_HAVE_GFOPENTLS
-struct Library *GFOpenTLSBase;
+struct Library *OpenTLSBase;
 #endif
 
 #ifdef __amigaos4__
@@ -79,9 +79,9 @@ int platform_open_net(const char **why)
         return 0;
     }
 #ifdef AP_HAVE_GFOPENTLS
-    if (!GFOpenTLSBase) {
-        GFOpenTLSBase = OpenLibrary("gfopentls.library", 1);
-        if (!GFOpenTLSBase) {
+    if (!OpenTLSBase) {
+        OpenTLSBase = OpenLibrary("gfopentls.library", 1);
+        if (!OpenTLSBase) {
             *why = "AmiPortAtlas needs gfopentls.library 1 or newer (part of GFOpenUp).";
             return 0;
         }
@@ -93,8 +93,8 @@ int platform_open_net(const char **why)
 void platform_close(void)
 {
 #ifdef AP_HAVE_GFOPENTLS
-    if (GFOpenTLSBase) CloseLibrary(GFOpenTLSBase);
-    GFOpenTLSBase = NULL;
+    if (OpenTLSBase) CloseLibrary(OpenTLSBase);
+    OpenTLSBase = NULL;
 #endif
     AP_CLOSE(SocketBase, ISocket);
     AP_CLOSE(AslBase, IAsl);

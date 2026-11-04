@@ -35,7 +35,7 @@
 
 extern struct Library *SocketBase;
 #ifdef AP_HAVE_GFOPENTLS
-extern struct Library *GFOpenTLSBase;
+extern struct Library *OpenTLSBase;
 static struct OTContext *tls_context;
 #endif
 
