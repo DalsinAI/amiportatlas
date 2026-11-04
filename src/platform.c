@@ -186,6 +186,41 @@ int platform_launch(CONST_STRPTR path)
     return OpenWorkbenchObjectA((STRPTR)path, NULL) != 0;
 }
 
+/* command run by a Shell in drawer dir (NULL: ours), waited for or not. A
+ * command line is one line: the Shell reads no more of it. */
+static LONG run_in(CONST_STRPTR dir, CONST_STRPTR command, long stack, int wait)
+{
+    BPTR in = Open((STRPTR)"NIL:", MODE_OLDFILE), out = Open((STRPTR)"NIL:", MODE_NEWFILE);
+    BPTR cd = dir ? Lock((STRPTR)dir, ACCESS_READ) : 0;
+    LONG rc;
+    if (!in || !out || (dir && !cd)) {
+        if (in) Close(in);
+        if (out) Close(out);
+        if (cd) UnLock(cd);
+        return -1;
+    }
+    rc = SystemTags(command, SYS_Input, in, SYS_Output, out, SYS_Asynch, wait ? FALSE : TRUE,
+                    NP_StackSize, stack < 32768 ? 32768 : stack, cd ? NP_CurrentDir : TAG_IGNORE, cd, TAG_DONE);
+    if (rc == -1) {                       /* not started: the handles and the lock are still ours */
+        Close(in);
+        Close(out);
+        if (cd) UnLock(cd);
+    }                                     /* started: the Shell's process frees all three as it ends */
+    return rc;
+}
+
+LONG platform_run_in(CONST_STRPTR dir, CONST_STRPTR command)
+{
+    return run_in(dir, command, 65536, 1);
+}
+
+int platform_start(CONST_STRPTR drawer, CONST_STRPTR program, long stack)
+{
+    char cmd[300];
+    snprintf(cmd, sizeof cmd, "\"%s\"", (const char *)program);
+    return run_in(drawer, (CONST_STRPTR)cmd, stack < 65536 ? 65536 : stack, 0) != -1;
+}
+
 void platform_open_url(CONST_STRPTR url)
 {
     char cmd[512];

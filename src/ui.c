@@ -271,8 +271,8 @@ static void select_port(Port *p)
     set_text("gname", p ? p->title : "AmiPortAtlas");
     inst = p ? installed(p) : NULL;
     if (p) {
-        if (p->version) snprintf(line, sizeof line, "%s (%s)", p->version, port_state_text(p));
-        else snprintf(line, sizeof line, "%s", port_state_text(p));
+        if (p->version && state_is(p, "released")) snprintf(line, sizeof line, "%s", p->version);
+        else snprintf(line, sizeof line, "Not released yet (%s)", port_state_text(p));
         fact("version", line);
         fact("installed", inst);
         fact("year", p->year);

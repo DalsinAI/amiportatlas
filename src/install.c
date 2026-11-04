@@ -262,9 +262,9 @@ int install_run(const Port *p, const char *parent, StepFn step, HttpSink progres
     SetVar((STRPTR)"AmiPortAtlas/Parent", (STRPTR)parent, -1, GVF_GLOBAL_ONLY);
     /* The script looks for the game's drawer beside itself, so it runs from
      * the unpacked drawer. Novice: no questions; the drawer is the one picked. */
-    snprintf(cmd, sizeof cmd, "CD \"%s\"\nSYS:System/Installer \"%s\" APPNAME \"%s\" MINUSER NOVICE DEFUSER NOVICE",
-             dir, script, p->title);
-    rc = platform_run(cmd);
+    snprintf(cmd, sizeof cmd, "SYS:System/Installer \"%s\" APPNAME \"%s\" MINUSER NOVICE DEFUSER NOVICE",
+             script, p->title);
+    rc = platform_run_in((CONST_STRPTR)dir, (CONST_STRPTR)cmd);
     DeleteVar((STRPTR)"AmiPortAtlas/Parent", GVF_GLOBAL_ONLY);
     join(dest, sizeof dest, parent, p->drawer);
     join(cmd, sizeof cmd, dest, p->program);
@@ -287,18 +287,23 @@ int install_run(const Port *p, const char *parent, StepFn step, HttpSink progres
 int install_launch(const Port *p, char *why, int whylen)
 {
     char path[300];
-    const char *drawer = installed_path(p);
+    const char *drawer = installed_path(p), *program;
+    Installed *g = find(p);
+    struct DiskObject *d;
+    long stack = 0;
     if (!drawer) { say(why, whylen, "This game isn't installed."); return 0; }
-    {
-        Installed *g = find(p);
-        join(path, sizeof path, drawer, g && g->program ? g->program : p->program ? p->program : p->drawer);
-    }
+    program = g && g->program ? g->program : p->program ? p->program : p->drawer;
+    join(path, sizeof path, drawer, program);
     if (!exists(path)) {
         snprintf(why, (size_t)whylen, "%s is no longer there. Was it moved?", path);
         return 0;
     }
-    if (!platform_launch(path)) { snprintf(why, (size_t)whylen, "%s could not be started.", path); return 0; }
-    return 1;
+    if (platform_launch(path)) return 1;
+    /* No Workbench to open it (OpenBench): from a Shell, with its icon's stack */
+    if ((d = GetDiskObject((STRPTR)path)) != NULL) { stack = d->do_StackSize; FreeDiskObject(d); }
+    if (platform_start(drawer, program, stack)) return 1;
+    snprintf(why, (size_t)whylen, "%s could not be started.", path);
+    return 0;
 }
 
 int install_remove(const Port *p, char *why, int whylen)

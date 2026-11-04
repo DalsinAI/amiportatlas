@@ -60,6 +60,11 @@ LONG platform_run(CONST_STRPTR command);
 
 /* Starts a program as Workbench would from its icon (path without ".info"). */
 int  platform_launch(CONST_STRPTR path);
+/* The same from a Shell, for a system where Workbench can't open it (OpenBench):
+ * started in its drawer with stack bytes of stack, not waited for. */
+int  platform_start(CONST_STRPTR drawer, CONST_STRPTR program, long stack);
+/* command run by a Shell with dir as its current drawer, waited for */
+LONG platform_run_in(CONST_STRPTR dir, CONST_STRPTR command);
 
 /* Opens a web page in the user's browser (OpenURL, else GFOpenBrowser). */
 void platform_open_url(CONST_STRPTR url);

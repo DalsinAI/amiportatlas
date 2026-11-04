@@ -386,6 +386,8 @@ static void host_scan(void *data)
     ui_refill();
     if (found < 0) { status("There wasn't the memory to look for installed games."); return; }
     bare = install_missing_icons(0);
+    snprintf(line, sizeof line, "Found %d installed game%s on DH0: to DH15:.", found, found == 1 ? "" : "s");
+    status(line);
     if (bare > 0) {
         snprintf(line, sizeof line, "%d installed game%s no icon for the drawer or the game.\n"
                  "Give %s Workbench's default icons? Icons already there are left as they are.",
@@ -411,6 +413,12 @@ static void host_remove(void *data, Port *p)
     char why[240], text[300];
     (void)data;
     if (!installed_path(p)) return;
+    if (installed_found(p)) {
+        snprintf(text, sizeof text, "AmiPortAtlas didn't install the copy in %s, so it leaves it alone.\n"
+                 "Delete it from Workbench if you want it gone.", installed_path(p));
+        ask(text, "OK");
+        return;
+    }
     snprintf(text, sizeof text, "Delete %s and everything in it?\nSaved games and settings in it go too.", installed_path(p));
     if (ask(text, "Delete|Cancel") != 1) return;
     if (!install_remove(p, why, (int)sizeof why)) ask(why, "OK");
