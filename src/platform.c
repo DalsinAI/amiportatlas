@@ -16,6 +16,7 @@
 #include <proto/datatypes.h>
 #include <proto/wb.h>
 #include <proto/asl.h>
+#include <proto/icon.h>
 #if defined(__has_include)
 #if __has_include(<proto/bsdsocket.h>)
 #include <proto/bsdsocket.h>   /* OpenNDK, NDK 3.2 */
@@ -29,7 +30,7 @@
 
 struct IntuitionBase *IntuitionBase;
 struct GfxBase *GfxBase;
-struct Library *GadToolsBase, *DataTypesBase, *WorkbenchBase, *AslBase;
+struct Library *GadToolsBase, *DataTypesBase, *WorkbenchBase, *AslBase, *IconBase;
 struct Library *SocketBase;
 #ifdef AP_HAVE_GFOPENTLS
 struct Library *OpenTLSBase;
@@ -42,6 +43,7 @@ struct GadToolsIFace *IGadTools;
 struct DataTypesIFace *IDataTypes;
 struct WorkbenchIFace *IWorkbench;
 struct AslIFace *IAsl;
+struct IconIFace *IIcon;
 struct SocketIFace *ISocket;
 
 static int iface(struct Library *base, struct Interface **out)
@@ -69,6 +71,8 @@ int platform_open(const char **missing)
     if (!AP_OPEN(DataTypesBase, "datatypes.library", 39, IDataTypes)) { *missing = "datatypes.library 39"; return 0; }
     if (!AP_OPEN(WorkbenchBase, "workbench.library", 44, IWorkbench)) { *missing = "workbench.library 44"; return 0; }
     if (!AP_OPEN(AslBase, "asl.library", 39, IAsl)) { *missing = "asl.library 39"; return 0; }
+    /* 44: GetDiskObject() and PutDiskObject() for found games' icons */
+    if (!AP_OPEN(IconBase, "icon.library", 44, IIcon)) { *missing = "icon.library 44"; return 0; }
     return 1;
 }
 
@@ -97,6 +101,7 @@ void platform_close(void)
     OpenTLSBase = NULL;
 #endif
     AP_CLOSE(SocketBase, ISocket);
+    AP_CLOSE(IconBase, IIcon);
     AP_CLOSE(AslBase, IAsl);
     AP_CLOSE(WorkbenchBase, IWorkbench);
     AP_CLOSE(DataTypesBase, IDataTypes);

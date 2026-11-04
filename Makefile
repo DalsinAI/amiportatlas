@@ -24,7 +24,7 @@ OUT     ?= build
 HOSTCC  ?= cc
 CC68K   ?= m68k-amigaos-gcc
 
-COMMON  = src/feed.c src/sha256.c
+COMMON  = src/feed.c src/sha256.c src/match.c
 AMIGA   = $(COMMON) src/ui.c src/http.c src/install.c src/platform.c src/app.c
 CWARN   = -Wall -Wextra -Wno-unused-parameter -Wno-pointer-sign
 OLUI_HOST = $(OLUI)/src/openlayout.c $(OLUI)/src/gfcss_parse.c $(OLUI)/src/gfcss_values.c \
@@ -41,7 +41,7 @@ test: $(OUT)/test_host $(OUT)/ui_host
 render: test
 	python3 tools/render_ui.py $(OUT)/window-ops.txt $(OUT)/window.png $(OLUI)/tests/ui_render.py $(PICTURE)
 
-$(OUT)/test_host: tests/test_host.c $(COMMON) src/feed.h src/sha256.h
+$(OUT)/test_host: tests/test_host.c $(COMMON) src/feed.h src/sha256.h src/match.h
 	@mkdir -p $(OUT)
 	$(HOSTCC) -std=c99 $(CWARN) -O1 -g -o $@ tests/test_host.c $(COMMON)
 

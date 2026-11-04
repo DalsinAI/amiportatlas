@@ -8,6 +8,7 @@
 #include <string.h>
 #include "../src/feed.h"
 #include "../src/sha256.h"
+#include "../src/match.h"
 
 static int failures;
 
@@ -133,6 +134,62 @@ static void test_feed_bad(void)
     }
 }
 
+/* The drawers found on a real lab disk (DH1:), told by their names */
+static void test_match(Feed *f)
+{
+    static const struct { const char *drawer, *id; } v[] = {
+        { "Brogue", "g-brogue-ce" }, { "Anarch", "g-anarch" }, { "Xrick", "g-xrick-rick-dangerous-engine" },
+        { "REminiscence", "g-reminiscence-flashback" }, { "HoD", "g-heart-of-darkness-hode" },
+        { "Angband", "g-angband" }, { "Meritous", "g-meritous" }, { "FishFillets", "g-fish-fillets-ng" },
+        { "OpenDUNE", "g-opendune" }, { "BurgerSpace", "g-burgerspace" }, { "Cosmo", "g-cosmo-engine" },
+        { "LibreQuake", "g-librequake" }, { "Kobo Deluxe", "g-kobo-deluxe" }, { "Zod", "g-zod-engine-z" },
+    };
+    static const char *const none[] = { "Test", "PkgTest", "C", "Prefs", "Quake", "Games" };
+    Port **list = (Port **)malloc(sizeof(Port *) * (size_t)f->count);
+    Matcher *m;
+    unsigned i;
+    int strength;
+    Port *p;
+    char key[MATCH_NAME];
+    match_key("Fish Fillets_NG!", key, sizeof key);
+    CHECK(strcmp(key, "fishfilletsng") == 0);
+    if (!list) return;
+    for (i = 0; i < (unsigned)f->count; i++) list[i] = &f->ports[i];
+    m = matcher_new(list, f->count);
+    CHECK(m != NULL);
+    for (i = 0; i < sizeof v / sizeof v[0]; i++) {
+        p = matcher_find(m, v[i].drawer, &strength);
+        if (!p || strcmp(p->id, v[i].id) != 0) printf("  %s: %s\n", v[i].drawer, p ? p->id : "none");
+        CHECK(p && strcmp(p->id, v[i].id) == 0);
+    }
+    for (i = 0; i < sizeof none / sizeof none[0]; i++) {
+        p = matcher_find(m, none[i], NULL);
+        if (p) printf("  %s: %s\n", none[i], p->id);
+        CHECK(p == NULL);   /* "Quake" fits several Quakes: none of them */
+    }
+    /* the program in a drawer: the drawer's name first, never leftovers */
+    p = matcher_find(m, "Brogue", NULL);
+    CHECK(match_program(p, "Brogue", "brogue") > match_program(p, "Brogue", "brogue-debug"));
+    CHECK(match_program(p, "Brogue", "brogue.old") == 0 && match_program(p, "Brogue", "brogue.info") == 0);
+    CHECK(match_program(p, "Brogue", "Brogue.log") == 0 && match_program(p, "Brogue", "rs_old") == 0);
+    p = matcher_find(m, "REminiscence", NULL);
+    CHECK(match_program(p, "REminiscence", "rs") > match_program(p, "REminiscence", "rs.cfg"));
+    p = matcher_find(m, "Angband", NULL);
+    CHECK(match_program(p, "Angband", "angband") > match_program(p, "Angband", "angband.new"));
+    CHECK(match_program(NULL, "Wolf3D", "wolf3d") > match_program(NULL, "Wolf3D", "wolf3d.fix"));
+    {
+        char v[24];
+        CHECK(match_version("$VER: Brogue CE 1.15.1 Amiga (03.11.2026)", v, sizeof v) && !strcmp(v, "1.15.1"));
+        CHECK(match_version("$VER: Anarch 1.1d (03.11.2026) AmiCradle", v, sizeof v) && !strcmp(v, "1.1d"));
+        CHECK(match_version("$VER: xrick 021212 (02.11.2026) AmiCradle", v, sizeof v) && !strcmp(v, "021212"));
+        CHECK(!match_version("$VER: meritous (03.11.2026)", v, sizeof v));
+        CHECK(version_cmp("1.9", "1.10") < 0 && version_cmp("1.10", "1.9") > 0 && version_cmp("1.2", "1.2.1") < 0);
+        CHECK(version_cmp("1.15.1", "1.15.1") == 0 && version_cmp("unknown", "1.0") == 0 && version_cmp("1.1d", "1.1") == 0);
+    }
+    matcher_free(m);
+    free(list);
+}
+
 static void test_feed_file(const char *path)
 {
     FILE *fp = fopen(path, "rb");
@@ -152,6 +209,7 @@ static void test_feed_file(const char *path)
     f = feed_parse(buf, len, &why);
     CHECK(f != NULL);
     if (f) {
+        test_match(f);
         for (i = 0; i < f->count; i++) {
             CHECK(f->ports[i].title && f->ports[i].number > 0);
             if (f->ports[i].nshots) with_shot++;

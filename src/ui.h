@@ -24,6 +24,7 @@ typedef struct UiHost {
     void (*remove)(void *data, Port *p);
     void (*open_url)(void *data, const char *url);
     void (*refresh)(void *data);                              /* Check for updates */
+    void (*scan)(void *data);                                 /* Find installed */
 } UiHost;
 
 /* Makes the window's contents in ui (after the theme's CSS is added). */

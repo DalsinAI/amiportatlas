@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "ui.h"
+#include "match.h"
 
 #define CYCLE_TICKS 50   /* ui_tick comes every 100 ms: a picture every 5 s */
 #define NCOLS 7
@@ -27,6 +28,7 @@ static const char markup[] =
 "  <label for=sort>Sort by</label>"
 "  <select id=sort><option>Number</option><option>Name</option><option>Year</option>"
 "   <option>State</option><option>Fit</option></select>"
+"  <button id=scan title='Look on DH0: to DH15: for games that are already installed'>Find installed</button>"
 "  <button id=updates title='Read the Port Atlas from www.amicradle.com again'>Check for updates</button>"
 " </row>"
 " <row id=middle>"
@@ -35,7 +37,7 @@ static const char markup[] =
 "   <row id=shotbar><button id=prev title='The picture before'>&lt;</button>"
 "    <span id=shotcap></span><button id=next title='The next picture'>&gt;</button></row>"
 "   <column id=facts>"
-"    <row class=fact id=r_version><span class=k>Version</span><span class=v id=f_version></span></row>"
+"    <row class=fact id=r_version><span class=k>Available</span><span class=v id=f_version></span></row>"
 "    <row class=fact id=r_installed><span class=k>Installed</span><span class=v id=f_installed></span></row>"
 "    <row class=fact id=r_year><span class=k>Year</span><span class=v id=f_year></span></row>"
 "    <row class=fact id=r_display><span class=k>Display</span><span class=v id=f_display></span></row>"
@@ -49,12 +51,12 @@ static const char markup[] =
 "  </fieldset>"
 "  <column id=right>"
 "   <row id=heads>"
-"    <button class=th id=h0 style='width:48px'>#</button><button class=th id=h1 style='width:196px'>Name</button>"
-"    <button class=th id=h2 style='width:48px'>Year</button><button class=th id=h3 style='width:92px'>State</button>"
-"    <button class=th id=h4 style='width:40px'>Fit</button><button class=th id=h5 style='width:80px'>Data</button>"
+"    <button class=th id=h0 style='width:44px'>#</button><button class=th id=h1 style='width:176px'>Name</button>"
+"    <button class=th id=h2 style='width:44px'>Year</button><button class=th id=h3 style='width:84px'>State</button>"
+"    <button class=th id=h4 style='width:36px'>Fit</button><button class=th id=h5 style='width:76px'>Available</button>"
 "    <button class=th id=h6 style='flex:1'>Installed</button>"
 "   </row>"
-"   <vlist id=list columns='48 196 48 92 40 80 70'></vlist>"
+"   <vlist id=list columns='44 176 44 84 36 76 76'></vlist>"
 "   <row id=actions><spacer></spacer>"
 "    <button id=install class=default disabled>Install...</button>"
 "    <button id=release disabled>Release page</button>"
@@ -95,7 +97,7 @@ static Port *sel;
 static int shot, ticks;
 
 static const int column_sort[NCOLS] = { SORT_NUMBER, SORT_NAME, SORT_YEAR, SORT_STATE, SORT_FIT, -1, -1 };
-static const char *const column_name[NCOLS] = { "#", "Name", "Year", "State", "Fit", "Data", "Installed" };
+static const char *const column_name[NCOLS] = { "#", "Name", "Year", "State", "Fit", "Available", "Installed" };
 static const char *const fit_name[] = { "", "040", "060", "GPU" };
 
 static olui_el *el(const char *id) { return olui_find(U, id); }
@@ -111,7 +113,8 @@ static const char *installed(const Port *p) { return H && H->installed ? H->inst
 static int is_update(const Port *p)
 {
     const char *v = installed(p);
-    return v && p->version && port_installable(p) && strcmp(v, p->version) != 0;
+    /* by number ("1.9" before "1.10"); a found copy with no version can't tell */
+    return v && p->version && port_installable(p) && version_cmp(v, p->version) < 0;
 }
 
 /* ---- the list ---- */
@@ -172,7 +175,7 @@ static const char *cell(void *data, int row, int column, int *image)
     case 2: snprintf(b, 24, "%.4s", p->year ? p->year : ""); return b;
     case 3: return is_update(p) ? "Update" : port_state_text(p);
     case 4: return p->fit ? p->fit : "";
-    case 5: return p->game_data ? p->game_data : "";
+    case 5: return p->version && state_is(p, "released") ? p->version : "";
     case 6: v = installed(p); return v ? v : "";
     default: return NULL;
     }
@@ -370,6 +373,7 @@ static void on_button(olui *ui, const olui_event *ev, void *d)
     if (strcmp(ev->id, "prev") == 0) show_shot(shot - 1);
     else if (strcmp(ev->id, "next") == 0) show_shot(shot + 1);
     else if (strcmp(ev->id, "updates") == 0) { if (H->refresh) H->refresh(H->data); }
+    else if (strcmp(ev->id, "scan") == 0) { if (H->scan) H->scan(H->data); }
     else if (!sel) return;
     else if (strcmp(ev->id, "install") == 0) {
         if (installed(sel) && !is_update(sel)) { if (H->launch) H->launch(H->data, sel); }
@@ -402,6 +406,7 @@ int ui_build(olui *ui, UiHost *host, char *err, size_t errlen)
     olui_on(ui, "prev", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "next", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "updates", OLUI_CLICK, on_button, NULL);
+    olui_on(ui, "scan", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "install", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "release", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "remove", OLUI_CLICK, on_button, NULL);
@@ -428,11 +433,11 @@ void ui_progress(int percent)
 
 void ui_busy(int busy)
 {
-    static const char *const ids[] = { "install", "release", "remove", "updates", "list", "find" };
+    static const char *const ids[] = { "install", "release", "remove", "updates", "scan", "list", "find" };
     int i;
-    if (!busy) { select_port(sel); olui_set_disabled(U, el("updates"), 0); olui_set_disabled(U, el("list"), 0);
-                 olui_set_disabled(U, el("find"), 0); return; }
-    for (i = 0; i < 6; i++) olui_set_disabled(U, el(ids[i]), 1);
+    if (!busy) { select_port(sel); olui_set_disabled(U, el("updates"), 0); olui_set_disabled(U, el("scan"), 0);
+                 olui_set_disabled(U, el("list"), 0); olui_set_disabled(U, el("find"), 0); return; }
+    for (i = 0; i < (int)(sizeof ids / sizeof ids[0]); i++) olui_set_disabled(U, el(ids[i]), 1);
 }
 
 void ui_tick(void)

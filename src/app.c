@@ -357,6 +357,48 @@ static void host_install(void *data, Port *p)
     }
 }
 
+/* ---- games already on the disks ---- */
+
+static int scan_tell(void *user, const char *where, int found)
+{
+    char line[200];
+    (void)user;
+    snprintf(line, sizeof line, "Looking for installed games: %.150s (%d found)", where, found);
+    status(line);
+    return 1;
+}
+
+static void host_scan(void *data)
+{
+    char line[200];
+    Port **list;
+    int i, found, bare;
+    (void)data;
+    if (!A.feed || !A.feed->count) return;
+    list = (Port **)malloc(sizeof(Port *) * (size_t)A.feed->count);
+    if (!list) return;
+    for (i = 0; i < A.feed->count; i++) list[i] = &A.feed->ports[i];
+    busy(1);
+    found = install_scan(list, A.feed->count, scan_tell, NULL);
+    free(list);
+    SetVar((STRPTR)"AmiPortAtlas/Scanned", (STRPTR)"1", 1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
+    busy(0);
+    ui_refill();
+    if (found < 0) { status("There wasn't the memory to look for installed games."); return; }
+    bare = install_missing_icons(0);
+    if (bare > 0) {
+        snprintf(line, sizeof line, "%d installed game%s no icon for the drawer or the game.\n"
+                 "Give %s Workbench's default icons? Icons already there are left as they are.",
+                 bare, bare == 1 ? " has" : "s have", bare == 1 ? "it" : "them");
+        if (ask(line, "Give icons|Not now") == 1) bare = install_missing_icons(1);
+        else bare = -1;
+    }
+    if (bare > 0) snprintf(line, sizeof line, "Found %d installed game%s on DH0: to DH15:, and gave %d of them icons.",
+                           found, found == 1 ? "" : "s", bare);
+    else snprintf(line, sizeof line, "Found %d installed game%s on DH0: to DH15:.", found, found == 1 ? "" : "s");
+    status(line);
+}
+
 static void host_launch(void *data, Port *p)
 {
     char why[240];
@@ -410,6 +452,7 @@ int main(void)
     host.remove = host_remove;
     host.open_url = host_open_url;
     host.refresh = host_refresh;
+    host.scan = host_scan;
     if (!ui_build(A.ui, &host, err, sizeof err)) { printf("AmiPortAtlas: %s\n", err); goto out; }
     get_pens();
     olui_amiga_own(A.glue, olui_find(A.ui, "shot"), draw_shot, NULL);
@@ -418,6 +461,11 @@ int main(void)
 
     installed_load();
     host_refresh(NULL);
+    {
+        /* the first start looks for games already installed */
+        char seen[4];
+        if (GetVar((STRPTR)"AmiPortAtlas/Scanned", (STRPTR)seen, sizeof seen, GVF_GLOBAL_ONLY) < 0) host_scan(NULL);
+    }
 
     while (!done) {
         struct IntuiMessage *m;

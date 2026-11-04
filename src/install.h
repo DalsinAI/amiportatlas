@@ -12,6 +12,20 @@
 void        installed_load(void);
 const char *installed_version(const Port *p);  /* NULL: not installed */
 const char *installed_path(const Port *p);     /* the game's drawer */
+int         installed_found(const Port *p);    /* found on a disk, not installed by AmiPortAtlas */
+
+/* Looks on DH0: to DH15:, three drawers deep, for games already installed:
+ * a drawer named as a game (its feed drawer, title or id) with a program in
+ * it, whose $VER gives the version. Each is remembered as found, so Play
+ * starts it; Remove leaves it alone. tell() hears each disk and every few
+ * drawers; answering 0 stops. Answers how many were found, -1 on no memory. */
+typedef int (*ScanFn)(void *user, const char *where, int found);
+int  install_scan(Port *const *ports, int n, ScanFn tell, void *user);
+
+/* Installed games whose drawer or program has no icon: how many, or with
+ * give, how many were given icon.library's default drawer and tool icons
+ * (65536 stack). An icon already there is never touched. */
+int  install_missing_icons(int give);
 
 /* Can p be installed here into parent? Answers 1, or 0 with the reason the
  * player reads. Nothing is downloaded. */
