@@ -50,9 +50,20 @@ static int hex4(Reader *r, unsigned long *out)
     return 1;
 }
 
-/* One code point into ISO-8859-1. */
+int feed_utf8;
+
+/* One code point into UTF-8, or into ISO-8859-1. */
 static void put(char **o, unsigned long cp)
 {
+    if (feed_utf8) {
+        if (cp < 0x80) *(*o)++ = (char)cp;
+        else if (cp < 0x800) { *(*o)++ = (char)(0xC0 | (cp >> 6)); *(*o)++ = (char)(0x80 | (cp & 0x3F)); }
+        else if (cp < 0x10000) { *(*o)++ = (char)(0xE0 | (cp >> 12)); *(*o)++ = (char)(0x80 | ((cp >> 6) & 0x3F));
+                                 *(*o)++ = (char)(0x80 | (cp & 0x3F)); }
+        else { *(*o)++ = (char)(0xF0 | (cp >> 18)); *(*o)++ = (char)(0x80 | ((cp >> 12) & 0x3F));
+               *(*o)++ = (char)(0x80 | ((cp >> 6) & 0x3F)); *(*o)++ = (char)(0x80 | (cp & 0x3F)); }
+        return;
+    }
     if (cp == 0x2013 || cp == 0x2014) cp = '-';
     else if (cp == 0x2018 || cp == 0x2019) cp = '\'';
     else if (cp == 0x201C || cp == 0x201D) cp = '"';
@@ -106,8 +117,8 @@ static int string(Reader *r, char **out, int allow_null)
                 break;
             default: *o++ = e; break;  /* \" \\ \/ */
             }
-        } else if (c < 0x80) {
-            *o++ = (char)c;
+        } else if (c < 0x80 || feed_utf8) {
+            *o++ = (char)c;  /* UTF-8 is kept as it came */
         } else {
             /* UTF-8 */
             unsigned long cp;

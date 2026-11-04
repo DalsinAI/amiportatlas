@@ -16,7 +16,15 @@
 #include <proto/datatypes.h>
 #include <proto/wb.h>
 #include <proto/asl.h>
+#if defined(__has_include)
+#if __has_include(<proto/bsdsocket.h>)
+#include <proto/bsdsocket.h>   /* OpenNDK, NDK 3.2 */
+#else
+#include <proto/socket.h>      /* Roadshow SDK, AROS, AmigaOS 4 */
+#endif
+#else
 #include <proto/socket.h>
+#endif
 #include <clib/alib_protos.h>
 
 struct IntuitionBase *IntuitionBase;

@@ -13,7 +13,7 @@ AROS and AmigaOS 4.1.
 
 | | AmigaOS 3.2.3 / GFOS | AROS | AmigaOS 4.1 |
 | --- | --- | --- | --- |
-| Window | ReAction (in 3.2.3; GFOpenReAction on GFOS) | GFOpenReAction | ReAction |
+| Window | GFOpenLayout UI (linked in), in the GFOpenGadTools theme | the same | the same |
 | Network | a TCP/IP stack (bsdsocket.library) | its stack | Roadshow |
 | HTTPS | gfopentls.library (GFOpenUp) | gfopentls.library | gfopentls.library |
 | Unpacking | SYS:Utilities/OpenCompress, else C:LhA | the same | C:LhA |
@@ -35,15 +35,15 @@ The website's Port Atlas page reads the same file, so the two always agree.
 ## Building
 
 ```
-make test                 the host tests: the feed reader and SHA-256
-make os3                  AmigaOS 3.2.3 and GFOS (m68k-amigaos-gcc)
-make aros-m68k            AROS m68k
-make aros-i386            AROS x86
-make os4                  AmigaOS 4.1 (ppc-amigaos-gcc)
+make test                 host tests: the feed reader, SHA-256 and the real window
+make render               the window drawn on the host as build/window.png
+make os3                  AmigaOS 3.2.3 and GFOS (68040, soft float)
 ```
 
-`TLS_INC` points at GFOpenTLS's `include` drawer (default
-`../openamigatls/include`).
+The Makefile's head names what each needs: a DalsinAI/gfopenlayout
+checkout (`OLUI`), GFOpenGadTools' theme reader (`OGT`), GFOpenTLS's
+headers (`TLS_INC`). The AROS and AmigaOS 4.1 builds follow once
+GFOpenLayout UI's glue and GFOpenTLS are built there.
 
 ## Licence
 

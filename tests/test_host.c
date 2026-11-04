@@ -106,6 +106,16 @@ static void test_feed_small(void)
     feed_sort(list, 3, SORT_FIT, 0);
     CHECK(strcmp(list[0]->id, "g-b") == 0 && strcmp(list[1]->id, "g-c") == 0);
     feed_free(f);
+
+    feed_utf8 = 1;
+    f = feed_parse(json, (long)strlen(json), &why);
+    CHECK(f != NULL);
+    if (f) {
+        CHECK(strcmp(f->ports[0].title, "Beta \xE2\x80\x93 Caf\xC3\xA9") == 0);
+        CHECK(strcmp(f->ports[1].title, "Alpha \xE2\x80\xA6") == 0);
+    }
+    feed_free(f);
+    feed_utf8 = 0;
 }
 
 static void test_feed_bad(void)

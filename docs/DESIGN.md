@@ -5,8 +5,13 @@ selected game's pictures top left, cycling every five seconds through that
 game's own screenshots; its facts under them; the whole Atlas on the right,
 anything without a release greyed; the buttons bottom right, read last.
 
-- **List:** a listbrowser with columns #, Name, Year, State, Fit, Game data
-  and Installed. Clicking a column title sorts by it, again reverses.
+- **Window:** GFOpenLayout UI: the window is HTML and CSS (`src/ui.c`),
+  laid out by GFOpenLayout and drawn in the theme GFOpenPrefs Look chose.
+  The same code lays the window out on the host (`make render`).
+- **List:** a `vlist` (rows given as they are drawn, so the 400-odd entries
+  cost only what shows) with columns #, Name, Year, State, Fit, Data and
+  Installed, and a mark: green to install, blue installed, orange an
+  update, gold our own games, grey not released yet. Clicking a column title sorts by it, again reverses.
   Show: All ports, Available, Our games, Released, Testing, In progress,
   Installed, Updates. Fit: Any, 040, 060, GPU. Find filters by name as it is
   typed.
@@ -30,7 +35,9 @@ anything without a release greyed; the buttons bottom right, read last.
 | `src/http.c` | HTTP/1.1 GET over bsdsocket.library and GFOpenTLS; redirects, chunked |
 | `src/install.c` | checks, install, launch, remove, the installed list |
 | `src/platform.c` | libraries and interfaces, hooks, CPU, free space, per system |
-| `src/app.c` | the ReAction window |
+| `src/ui.c` | the window in HTML and CSS, and what it does; no Amiga calls, host-tested |
+| `src/app.c` | the Intuition window and olui's glue, pictures, marks, the feed, installing |
+| `tests/ui_host.c`, `tools/render_ui.py` | the real window laid out and drawn on the host |
 
 ## Still to do
 
@@ -40,7 +47,10 @@ anything without a release greyed; the buttons bottom right, read last.
 2. The install progress window from the mockup, with Stop (the first cut
    uses the status line and the gauge).
 3. Pictures fetched in the background instead of when a game is picked.
-4. Builds of GFOpenTLS and GFOpenReAction for AROS x86 and AmigaOS 4.1.
+4. AROS and AmigaOS 4.1 builds: GFOpenLayout UI's Intuition glue and
+   GFOpenTLS built there.
+7. A vlist row in grey for what can't be installed yet (gfopenlayout: a
+   class a row, from the row function); the mark says it for now.
 5. In the feed: the drawer's keep list (saves and settings) so Remove can
    keep them, and per-system downloads for AROS x86 and AmigaOS 4.1.
 6. First build and lab run on origimagic for each target.

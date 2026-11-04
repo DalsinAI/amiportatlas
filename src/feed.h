@@ -44,9 +44,12 @@ typedef struct Feed {
     int   count;
 } Feed;
 
-/* Parses a whole ports.json held in memory (len bytes, need not end in 0).
- * Text is turned into ISO-8859-1 for Amiga fonts; a character outside it
- * becomes '?'. Answers NULL and an English reason in *why on failure. */
+/* Text comes out as ISO-8859-1 for Amiga bitmap fonts (a character outside
+ * it becomes '?'), or, with feed_utf8 set, as UTF-8 (GFOpenLayout UI takes
+ * UTF-8 and turns it into the font's characters itself). */
+extern int feed_utf8;
+
+/* Parses a whole ports.json held in memory (len bytes, need not end in 0). Answers NULL and an English reason in *why on failure. */
 Feed *feed_parse(const char *text, long len, const char **why);
 void  feed_free(Feed *feed);
 
