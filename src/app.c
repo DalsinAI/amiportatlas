@@ -14,7 +14,6 @@
 #include <dos/var.h>
 #include <intuition/intuition.h>
 #include <graphics/gfx.h>
-#include <graphics/scale.h>
 #include <datatypes/datatypes.h>
 #include <datatypes/pictureclass.h>
 #include <libraries/asl.h>
@@ -22,6 +21,7 @@
 #include <proto/graphics.h>
 #include <proto/datatypes.h>
 #include <proto/asl.h>
+#include <clib/alib_protos.h>
 
 #include "gfopenlayout_ui_amiga.h"
 #include "feed.h"
@@ -43,46 +43,58 @@ static struct {
     Feed *feed;
     LONG pens[MARK_ORIGINAL + 1];
     Object *dto;                 /* the current picture */
-    struct BitMap *src;          /* its bitmap (the datatype's) */
-    ULONG src_w, src_h;
-    struct BitMap *pic;          /* scaled to the box */
+    ULONG src_w, src_h;          /* its own size */
+    struct BitMap *pic;          /* the datatype's bitmap, scaled to the box */
     int pic_w, pic_h, box_w, box_h;
 } A;
 
 /* ---- the pictures ---- */
 
+/* picture.datatype V44 scales its own picture. graphics.library's
+ * BitMapScale() draws garbage from an RTG bitmap (seen on OpenBench),
+ * so the datatype does it, and the program only blits the result. */
+#ifndef PDTM_SCALE
+#define PDTM_SCALE (DTM_Dummy + 0x62)
+struct pdtScale { ULONG MethodID; ULONG ps_NewWidth; ULONG ps_NewHeight; ULONG ps_Flags; };
+#endif
+
 static void drop_picture(void)
 {
-    if (A.pic) { WaitBlit(); FreeBitMap(A.pic); A.pic = NULL; }
-    if (A.dto) { DisposeDTObject(A.dto); A.dto = NULL; }
-    A.src = NULL;
+    if (A.dto) { WaitBlit(); DisposeDTObject(A.dto); A.dto = NULL; }
+    A.pic = NULL;
+    A.src_w = A.src_h = 0;
     A.box_w = A.box_h = 0;
 }
 
-/* The picture scaled to fit w x h, keeping its shape. */
+/* The picture scaled to fit w x h, keeping its shape. When the datatype
+ * can't scale, the picture is drawn at its own size, centred and clipped. */
 static void scale_to(int w, int h)
 {
     ULONG dw, dh;
-    struct BitScaleArgs bsa;
-    if (!A.src || w <= 0 || h <= 0) return;
+    struct pdtScale ps;
+    if (!A.dto || !A.src_w || !A.src_h || w <= 0 || h <= 0) return;
     if (A.pic && A.box_w == w && A.box_h == h) return;
-    if (A.pic) { WaitBlit(); FreeBitMap(A.pic); A.pic = NULL; }
     A.box_w = w;
     A.box_h = h;
     dw = (ULONG)w;
     dh = A.src_h * dw / A.src_w;
     if (dh > (ULONG)h) { dh = (ULONG)h; dw = A.src_w * dh / A.src_h; }
-    A.pic = AllocBitMap(dw, dh, GetBitMapAttr(A.src, BMA_DEPTH), BMF_CLEAR, A.win->RPort->BitMap);
-    if (!A.pic) return;
-    memset(&bsa, 0, sizeof bsa);
-    bsa.bsa_SrcWidth = (UWORD)A.src_w;   bsa.bsa_SrcHeight = (UWORD)A.src_h;
-    bsa.bsa_XSrcFactor = (UWORD)A.src_w; bsa.bsa_YSrcFactor = (UWORD)A.src_h;
-    bsa.bsa_XDestFactor = (UWORD)dw;     bsa.bsa_YDestFactor = (UWORD)dh;
-    bsa.bsa_SrcBitMap = A.src;
-    bsa.bsa_DestBitMap = A.pic;
-    BitMapScale(&bsa);
-    A.pic_w = (int)dw;
-    A.pic_h = (int)dh;
+    if (dw < 1) dw = 1;
+    if (dh < 1) dh = 1;
+    A.pic = NULL;
+    ps.MethodID = PDTM_SCALE;
+    ps.ps_NewWidth = dw;
+    ps.ps_NewHeight = dh;
+    ps.ps_Flags = 0;
+    if (DoMethodA(A.dto, (Msg)&ps) && DoDTMethod(A.dto, NULL, NULL, DTM_PROCLAYOUT, NULL, TRUE)) {
+        A.pic_w = (int)dw;
+        A.pic_h = (int)dh;
+    } else {
+        DoDTMethod(A.dto, NULL, NULL, DTM_PROCLAYOUT, NULL, TRUE);
+        A.pic_w = (int)A.src_w;
+        A.pic_h = (int)A.src_h;
+    }
+    GetDTAttrs(A.dto, PDTA_DestBitMap, (ULONG)&A.pic, TAG_DONE);
 }
 
 /* olui_amiga_own: the picture box, drawn by us in the window's pixels. */
@@ -93,7 +105,12 @@ static void draw_shot(void *data, const olui_el *el, int x, int y, int w, int h)
     scale_to(w, h);
     SetAPen(rp, 1);
     RectFill(rp, x, y, x + w - 1, y + h - 1);
-    if (A.pic) BltBitMapRastPort(A.pic, 0, 0, rp, x + (w - A.pic_w) / 2, y + (h - A.pic_h) / 2, A.pic_w, A.pic_h, 0xC0);
+    if (A.pic) {
+        /* Centred; a picture bigger than the box shows its middle. */
+        int bw = A.pic_w < w ? A.pic_w : w, bh = A.pic_h < h ? A.pic_h : h;
+        BltBitMapRastPort(A.pic, (A.pic_w - bw) / 2, (A.pic_h - bh) / 2, rp,
+                          x + (w - bw) / 2, y + (h - bh) / 2, bw, bh, 0xC0);
+    }
 }
 
 static void redraw_shot(void)
@@ -126,10 +143,13 @@ static void host_picture(void *data, const Port *p, int shot)
             A.dto = NewDTObject((APTR)path, DTA_GroupID, GID_PICTURE, PDTA_Remap, TRUE,
                                 PDTA_Screen, (ULONG)A.win->WScreen, PDTA_DestMode, PMODE_V43,
                                 OBP_Precision, PRECISION_IMAGE, TAG_DONE);
-        if (A.dto && DoDTMethod(A.dto, NULL, NULL, DTM_PROCLAYOUT, NULL, TRUE))
-            GetDTAttrs(A.dto, PDTA_DestBitMap, (ULONG)&A.src, PDTA_BitMapHeader, (ULONG)&bmh, TAG_DONE);
-        if (A.src && bmh) { A.src_w = bmh->bmh_Width; A.src_h = bmh->bmh_Height; }
-        else A.src = NULL;
+        if (A.dto && GetDTAttrs(A.dto, PDTA_BitMapHeader, (ULONG)&bmh, TAG_DONE) && bmh) {
+            A.src_w = bmh->bmh_Width;
+            A.src_h = bmh->bmh_Height;
+        } else if (A.dto) {
+            DisposeDTObject(A.dto);
+            A.dto = NULL;
+        }
     }
     redraw_shot();
 }
