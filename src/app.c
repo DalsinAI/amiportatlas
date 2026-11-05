@@ -4,7 +4,7 @@
  * ui.c describes the window; this file gives it what needs the system:
  * the window and its event loop (olui's Amiga glue), the pictures (through
  * datatypes, scaled into the picture box, drawn by the program), the list's
- * state marks, the feed from the AmiCradle site and installing.
+ * state marks, the sources (repo.c) and installing.
  */
 #include "platform.h"
 
@@ -27,20 +27,20 @@
 #include "feed.h"
 #include "http.h"
 #include "install.h"
+#include "repo.h"
 #include "ui.h"
 
-#define FEED_URL   "https://www.amicradle.com/ports/ports.json"
 #define CACHE      "PROGDIR:Cache"
-#define FEED_CACHE CACHE "/ports.json"
-#define FEED_MAX   (4L * 1024 * 1024)
 
-static const char vers[] = "$VER: AmiPortAtlas 0.1 (04.11.2026) The AmiCradle Team";
+static const char vers[] = "$VER: AmiPortAtlas 0.2 (05.11.2026) The AmiCradle Team";
 
 static struct {
     struct Window *win;
     olui *ui;
     olui_amiga *glue;
     Feed *feed;
+    Sources *sources;
+    const char **from_ids, **from_names;   /* the sources switched on, for From */
     LONG pens[MARK_ORIGINAL + 1];
     Object *dto;                 /* the current picture */
     ULONG src_w, src_h;          /* its own size */
@@ -240,26 +240,48 @@ static void status(const char *text)
 
 /* ---- the feed ---- */
 
-static Feed *load_cached_feed(void)
+/* The window's cache drawer is the one Atlas uses too. */
+static void share_cache(void)
 {
-    BPTR fh = Open((STRPTR)FEED_CACHE, MODE_OLDFILE);
-    char *buf;
-    const char *why;
-    LONG len;
-    Feed *f = NULL;
-    if (!fh) return NULL;
-    buf = (char *)malloc(FEED_MAX);
-    if (buf) {
-        len = Read(fh, buf, FEED_MAX);
-        if (len > 0) f = feed_parse(buf, len, &why);
-        free(buf);
-    }
-    Close(fh);
-    return f;
+    char path[200];
+    BPTR l = Lock((STRPTR)CACHE, ACCESS_READ);
+    if (!l) l = CreateDir((STRPTR)CACHE);
+    if (!l) return;
+    if (NameFromLock(l, (STRPTR)path, sizeof path))
+        SetVar((STRPTR)"AmiPortAtlas/Cache", (STRPTR)path, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
+    UnLock(l);
 }
 
-/* The saved pictures deleted, ports.json kept. In this process, as only it
+static void repo_tell(void *user, const char *line) { (void)user; status(line); }
+
+static const char *host_source_name(void *data, const char *id) { (void)data; return repo_source_name(A.sources, id); }
+
+/* From lists the sources switched on that gave entries. */
+static void set_sources(Sources *s)
+{
+    int i, n = 0;
+    const char **ids = s ? (const char **)malloc(sizeof(char *) * (size_t)(s->count + 1)) : NULL;
+    const char **names = s ? (const char **)malloc(sizeof(char *) * (size_t)(s->count + 1)) : NULL;
+    if (ids && names)
+        for (i = 0; i < s->count; i++)
+            if (s->list[i].on && s->list[i].count > 0) { ids[n] = s->list[i].id; names[n] = s->list[i].name; n++; }
+    ui_set_sources(ids, names, ids && names ? n : 0);
+    free(A.from_ids);
+    free(A.from_names);
+    A.from_ids = ids;
+    A.from_names = names;
+    sources_free(A.sources);
+    A.sources = s;
+}
+
+/* The saved pictures deleted, the sources' indexes (.json) kept. In this process, as only it
  * knows where PROGDIR: is; the names first, as ExNext can't run past deletes. */
+static int json_name(const char *name)
+{
+    size_t n = strlen(name);
+    return n > 5 && strcmp(name + n - 5, ".json") == 0;
+}
+
 static void purge_pictures(void)
 {
     struct FileInfoBlock *fib = (struct FileInfoBlock *)AllocDosObject(DOS_FIB, NULL);
@@ -270,7 +292,7 @@ static void purge_pictures(void)
     if (fib && names && (l = Lock((STRPTR)CACHE, ACCESS_READ)) != 0) {
         if (Examine(l, fib))
             while (n < 512 && ExNext(l, fib))
-                if (fib->fib_DirEntryType < 0 && strcmp((const char *)fib->fib_FileName, "ports.json") != 0)
+                if (fib->fib_DirEntryType < 0 && !json_name((const char *)fib->fib_FileName))
                     snprintf(names[n++], 108, "%s", (const char *)fib->fib_FileName);
         UnLock(l);
         for (i = 0; i < n; i++) {
@@ -282,56 +304,57 @@ static void purge_pictures(void)
     if (fib) FreeDosObject(DOS_FIB, fib);
 }
 
-static void host_refresh(void *data)
+/* Every source read again (fetch), or the saved copies (at start, before
+ * the network is asked). */
+static void read_sources(int fetch)
 {
-    char why[200];
-    char *text = NULL;
-    long len;
-    const char *bad;
-    Feed *f = NULL, *old = A.feed;
-    BPTR l = CreateDir((STRPTR)CACHE);
-    (void)data;
-    if (l) UnLock(l);
+    char why[200], line[300];
+    Feed *f, *old = A.feed;
+    Sources *s = NULL;
     busy(1);
-    status("Reading the Port Atlas from www.amicradle.com...");
-    if (http_get_mem(FEED_URL, FEED_MAX, &text, &len, why, (int)sizeof why)) {
-        f = feed_parse(text, len, &bad);
-        if (f) {
-            char seen[40];
-            BPTR fh;
-            /* a newer Atlas may have new pictures under the old names: the saved ones go */
-            if (f->generated && (GetVar((STRPTR)"AmiPortAtlas/Generated", (STRPTR)seen, sizeof seen, GVF_GLOBAL_ONLY) < 0
-                                 || strcmp(seen, f->generated) != 0)) {
-                purge_pictures();
-                SetVar((STRPTR)"AmiPortAtlas/Generated", (STRPTR)f->generated, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
-            }
-            fh = Open((STRPTR)FEED_CACHE, MODE_NEWFILE);
-            if (fh) { Write(fh, text, len); Close(fh); }
-            A.nfailed = 0;
-            A.offline = 0;
-        } else {
-            snprintf(why, sizeof why, "The Port Atlas could not be read: %s", bad);
-        }
-        free(text);
-    }
+    f = repo_read(fetch, &s, repo_tell, NULL, why, (int)sizeof why);
     installed_load();
     if (f) {
+        char seen[40];
+        /* a newer Atlas may have new pictures under the old names: the saved ones go */
+        if (fetch && f->generated && (GetVar((STRPTR)"AmiPortAtlas/Generated", (STRPTR)seen, sizeof seen, GVF_GLOBAL_ONLY) < 0
+                                      || strcmp(seen, f->generated) != 0)) {
+            purge_pictures();
+            SetVar((STRPTR)"AmiPortAtlas/Generated", (STRPTR)f->generated, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
+        }
+        A.nfailed = 0;
+        A.offline = 0;
         drop_picture();         /* its Port goes with the old feed */
         A.feed = f;
+        set_sources(s);
         ui_set_feed(f);
         feed_free(old);
-    } else if (!old) {
-        A.feed = load_cached_feed();
-        if (A.feed) {
-            ui_set_feed(A.feed);
-            ui_status("Offline: the last saved copy of the Port Atlas.");
-        } else {
-            ui_status(why);
-        }
+        repo_summary(A.sources, line, (int)sizeof line);
+        ui_status(line);
     } else {
+        sources_free(s);
         ui_status(why);
     }
     busy(0);
+}
+
+/* 1 when every source switched on was just read from the network (the
+ * first start, with nothing saved yet), so there's no need to again. */
+static int all_fresh(void)
+{
+    int i;
+    if (!A.sources) return 0;
+    for (i = 0; i < A.sources->count; i++) {
+        const Source *x = &A.sources->list[i];
+        if (x->on && x->index && x->state != SRC_FRESH) return 0;
+    }
+    return 1;
+}
+
+static void host_refresh(void *data)
+{
+    (void)data;
+    read_sources(1);
 }
 
 /* ---- installing ---- */
@@ -394,7 +417,14 @@ static void host_install(void *data, Port *p)
 {
     char drawer[256], why[240], text[600];
     LONG answer;
+    Source *from = sources_find(A.sources, p->source);
     (void)data;
+    /* the Team checks what the Port Atlas offers; a source the player added, nobody has */
+    if (from && !from->checked) {
+        snprintf(text, sizeof text, "%s comes from %s, which The AmiCradle Team doesn't check.\n"
+                 "Its installer runs on this Amiga. Install it only if you trust %s.", p->title, from->name, from->name);
+        if (ask(text, "Go on|Cancel") != 1) return;
+    }
     default_drawer(drawer, (int)sizeof drawer);
     for (;;) {
         if (!install_check(p, drawer, why, (int)sizeof why)) { ask(why, "OK"); return; }
@@ -526,14 +556,17 @@ int main(void)
     host.open_url = host_open_url;
     host.refresh = host_refresh;
     host.scan = host_scan;
+    host.source_name = host_source_name;
     if (!ui_build(A.ui, &host, err, sizeof err)) { printf("AmiPortAtlas: %s\n", err); goto out; }
     get_pens();
     olui_amiga_own(A.glue, olui_find(A.ui, "shot"), draw_shot, NULL);
     olui_amiga_images(A.glue, draw_mark, NULL);
     olui_amiga_layout(A.glue);
 
+    share_cache();
     installed_load();
-    host_refresh(NULL);
+    read_sources(0);            /* the saved copies show at once */
+    if (!all_fresh()) read_sources(1);
     {
         /* the first start looks for games already installed */
         char seen[4];
@@ -560,6 +593,9 @@ out:
     if (A.ui) olui_free(A.ui);
     if (A.win) { free_pens(); CloseWindow(A.win); }  /* pens never obtained are -1 */
     feed_free(A.feed);
+    sources_free(A.sources);
+    free(A.from_ids);
+    free(A.from_names);
     platform_close();
     return rc;
 }

@@ -29,6 +29,7 @@
 #endif
 
 #include "http.h"
+#include "net.h"
 #include "sha256.h"
 
 #define AP_AGENT "AmiPortAtlas/0.1 (" AP_SYSTEM ")"
@@ -39,15 +40,6 @@ extern struct Library *OpenTLSBase;
 static struct OTContext *tls_context;
 #endif
 
-typedef struct {
-    LONG fd;
-#ifdef AP_HAVE_GFOPENTLS
-    struct OTConnection *tls;
-#endif
-    char buf[4096];
-    long have, pos;
-} Conn;
-
 static void say(char *why, int whylen, const char *text)
 {
     if (whylen > 0) {
@@ -56,7 +48,7 @@ static void say(char *why, int whylen, const char *text)
     }
 }
 
-static int conn_open(Conn *c, const char *host, int port, int secure, char *why, int whylen)
+int net_open(Conn *c, const char *host, int port, int secure, char *why, int whylen)
 {
     struct hostent *he;
     struct sockaddr_in sa;
@@ -77,6 +69,11 @@ static int conn_open(Conn *c, const char *host, int port, int secure, char *why,
         return 0;
     }
     if (!secure) return 1;
+    return net_tls(c, host, "http/1.1", why, whylen);
+}
+
+int net_tls(Conn *c, const char *host, const char *alpn, char *why, int whylen)
+{
 #ifdef AP_HAVE_GFOPENTLS
     {
         LONG err = 0;
@@ -87,7 +84,7 @@ static int conn_open(Conn *c, const char *host, int port, int secure, char *why,
         c->tls = OT_NewConnection(tls_context, (CONST_STRPTR)host, &err);
         if (!c->tls) { snprintf(why, (size_t)whylen, "GFOpenTLS: %s", OT_ErrorString(err)); return 0; }
         OT_SetSocket(c->tls, c->fd, SocketBase);
-        OT_SetALPN(c->tls, (CONST_STRPTR)"http/1.1");
+        if (alpn) OT_SetALPN(c->tls, (CONST_STRPTR)alpn);
         if (OT_Handshake(c->tls) != OTERR_OK) {
             CONST_STRPTR text = OT_GetErrorText(c->tls);
             snprintf(why, (size_t)whylen, "A secure connection to %s failed: %s", host, (const char *)text);
@@ -101,7 +98,7 @@ static int conn_open(Conn *c, const char *host, int port, int secure, char *why,
 #endif
 }
 
-static void conn_close(Conn *c)
+void net_close(Conn *c)
 {
 #ifdef AP_HAVE_GFOPENTLS
     if (c->tls) {
@@ -114,7 +111,7 @@ static void conn_close(Conn *c)
     c->fd = -1;
 }
 
-static long raw_read(Conn *c, char *buf, long n)
+long net_read(Conn *c, char *buf, long n)
 {
 #ifdef AP_HAVE_GFOPENTLS
     if (c->tls) {
@@ -125,7 +122,7 @@ static long raw_read(Conn *c, char *buf, long n)
     return recv(c->fd, buf, n, 0);
 }
 
-static long raw_write(Conn *c, const char *buf, long n)
+long net_write(Conn *c, const char *buf, long n)
 {
 #ifdef AP_HAVE_GFOPENTLS
     if (c->tls) return OT_Write(c->tls, buf, n);
@@ -133,11 +130,11 @@ static long raw_write(Conn *c, const char *buf, long n)
     return send(c->fd, (APTR)buf, n, 0);
 }
 
-static int fill(Conn *c)
+int net_fill(Conn *c)
 {
     long got;
     if (c->pos < c->have) return 1;
-    got = raw_read(c, c->buf, (long)sizeof c->buf);
+    got = net_read(c, c->buf, (long)sizeof c->buf);
     if (got <= 0) return 0;
     c->have = got;
     c->pos = 0;
@@ -145,12 +142,12 @@ static int fill(Conn *c)
 }
 
 /* One header line, without its CRLF. */
-static int read_line(Conn *c, char *line, int max)
+int net_line(Conn *c, char *line, int max)
 {
     int n = 0;
     for (;;) {
         char ch;
-        if (!fill(c)) return 0;
+        if (!net_fill(c)) return 0;
         ch = c->buf[c->pos++];
         if (ch == '\n') break;
         if (ch != '\r' && n < max - 1) line[n++] = ch;
@@ -205,19 +202,19 @@ int http_get(const char *url, HttpSink sink, void *user, char *why, int whylen)
         }
         c = (Conn *)malloc(sizeof(Conn));
         if (!c) { say(why, whylen, "Out of memory."); return 0; }
-        if (!conn_open(c, host, port, secure, why, whylen)) { conn_close(c); free(c); return 0; }
+        if (!net_open(c, host, port, secure, why, whylen)) { net_close(c); free(c); return 0; }
         snprintf(req, sizeof req, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: " AP_AGENT
                  "\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n", path, host);
-        if (raw_write(c, req, (long)strlen(req)) != (long)strlen(req)) {
+        if (net_write(c, req, (long)strlen(req)) != (long)strlen(req)) {
             say(why, whylen, "The request could not be sent.");
-            conn_close(c); free(c); return 0;
+            net_close(c); free(c); return 0;
         }
-        if (!read_line(c, line, (int)sizeof line) || sscanf(line, "HTTP/%*d.%*d %d", &status) != 1) {
+        if (!net_line(c, line, (int)sizeof line) || sscanf(line, "HTTP/%*d.%*d %d", &status) != 1) {
             say(why, whylen, "The server's answer could not be read.");
-            conn_close(c); free(c); return 0;
+            net_close(c); free(c); return 0;
         }
         for (;;) {
-            if (!read_line(c, line, (int)sizeof line)) { status = 0; break; }
+            if (!net_line(c, line, (int)sizeof line)) { status = 0; break; }
             if (!line[0]) break;
             if (starts(line, "content-length:")) total = atol(line + 15);
             else if (starts(line, "transfer-encoding:") && strstr(line, "chunked")) chunked = 1;
@@ -229,17 +226,17 @@ int http_get(const char *url, HttpSink sink, void *user, char *why, int whylen)
                 redirect = 1;
             }
         }
-        if (redirect) { conn_close(c); free(c); continue; }
+        if (redirect) { net_close(c); free(c); continue; }
         if (status != 200) {
             if (status == 404) say(why, whylen, "The file is not on the server (404).");
             else snprintf(why, (size_t)whylen, "The server answered %d.", status);
-            conn_close(c); free(c); return 0;
+            net_close(c); free(c); return 0;
         }
         ok = 1;
         for (;;) {
             long want;
             if (chunked) {
-                if (!read_line(c, line, (int)sizeof line)) { ok = 0; break; }
+                if (!net_line(c, line, (int)sizeof line)) { ok = 0; break; }
                 want = strtol(line, NULL, 16);
                 if (want == 0) break;
             } else {
@@ -248,21 +245,21 @@ int http_get(const char *url, HttpSink sink, void *user, char *why, int whylen)
             }
             while (want > 0) {
                 long n;
-                if (!fill(c)) { if (!chunked && total < 0) want = 0; else ok = 0; break; }
+                if (!net_fill(c)) { if (!chunked && total < 0) want = 0; else ok = 0; break; }
                 n = c->have - c->pos;
                 if (n > want) n = want;
                 done += n;
                 if (!sink(user, c->buf + c->pos, n, done, total)) {
                     say(why, whylen, "Stopped.");
-                    conn_close(c); free(c); return 0;
+                    net_close(c); free(c); return 0;
                 }
                 c->pos += n;
                 want -= n;
             }
             if (!ok || (!chunked && (total < 0 || done >= total))) break;
-            if (chunked && !read_line(c, line, (int)sizeof line)) { ok = 0; break; }
+            if (chunked && !net_line(c, line, (int)sizeof line)) { ok = 0; break; }
         }
-        conn_close(c);
+        net_close(c);
         free(c);
         if (!ok) say(why, whylen, "The connection broke before the whole file came.");
         return ok;
@@ -309,7 +306,7 @@ int http_get_file(const char *url, const char *path, const char *sha256,
     if (ok && sha256) {
         sha256_final(&j.sha, digest);
         if (!sha256_matches(digest, sha256)) {
-            say(why, whylen, "The download does not match the Port Atlas checksum, so it was not used.");
+            say(why, whylen, "The download does not match its source's checksum, so it was not used.");
             ok = 0;
         }
     }
