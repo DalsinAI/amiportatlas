@@ -178,6 +178,7 @@ int match_version(const char *ver, char *out, int max)
         while (*s == ' ') s++;
         if (!*s || *s == '(' || *s == '\r' || *s == '\n') return 0;
         for (t = s; *t && *t != ' ' && *t != '(' && *t != '\r' && *t != '\n'; t++) {}
+        if ((*s == 'v' || *s == 'V') && s[1] >= '0' && s[1] <= '9') s++;   /* "v1.2" */
         if (*s >= '0' && *s <= '9') {
             n = (int)(t - s) < max - 1 ? (int)(t - s) : max - 1;
             memcpy(out, s, (size_t)n);

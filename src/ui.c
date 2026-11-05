@@ -267,6 +267,7 @@ static void select_port(Port *p)
 {
     char line[200];
     const char *inst;
+    int same = p && p == sel;   /* shown again (after a busy spell): its picture stays */
     sel = p;
     set_text("gname", p ? p->title : "AmiPortAtlas");
     inst = p ? installed(p) : NULL;
@@ -301,7 +302,7 @@ static void select_port(Port *p)
     olui_set_disabled(U, el("install"), !(p && (inst || port_installable(p))));
     olui_set_disabled(U, el("remove"), !inst);
     olui_set_disabled(U, el("release"), !(p && (p->release_url || p->port_repo)));
-    show_shot(0);
+    show_shot(same ? shot : 0);
 }
 
 void ui_select_row(int row)

@@ -24,6 +24,7 @@
 #define WORK      "T:AmiPortAtlas"
 #define LIST_ENV  "AmiPortAtlas/Installed"
 #define MAX_GAMES 512
+#define LIST_MAX  65536   /* the Installed list's room: 512 games of 128 bytes */
 
 /* path is the game's drawer; program the file in it that starts the game,
  * when it isn't the feed's; found: on the disk already, not installed by us */
@@ -65,12 +66,12 @@ void installed_load(void)
     char *buf;
     LONG n;
     forget_all();
-    buf = (char *)malloc(16384);
+    buf = (char *)malloc(LIST_MAX);
     if (!buf) return;
-    n = GetVar((STRPTR)LIST_ENV, (STRPTR)buf, 16384, GVF_GLOBAL_ONLY | GVF_BINARY_VAR);
+    n = GetVar((STRPTR)LIST_ENV, (STRPTR)buf, LIST_MAX, GVF_GLOBAL_ONLY | GVF_BINARY_VAR);
     if (n > 0) {
         char *line = buf;
-        buf[n < 16383 ? n : 16383] = 0;
+        buf[n < LIST_MAX - 1 ? n : LIST_MAX - 1] = 0;
         while (*line && ngames < MAX_GAMES) {
             /* id, version, drawer; then, from 0.2, the program and "found" */
             char *end = strchr(line, '\n'), *t1, *t2, *t3, *t4;
@@ -103,13 +104,19 @@ static int installed_save(void)
     char *buf;
     long len = 0;
     int i, ok;
-    buf = (char *)malloc(16384);
+    buf = (char *)malloc(LIST_MAX);
     if (!buf) return 0;
     buf[0] = 0;
-    for (i = 0; i < ngames; i++)
-        if (len < 16000)
-            len += snprintf(buf + len, (size_t)(16384 - len), "%s\t%s\t%s\t%s\t%s\n", games[i].id, games[i].version,
-                            games[i].path, games[i].program ? games[i].program : "", games[i].found ? "found" : "");
+    /* games installed by AmiPortAtlas first, so a full list drops found ones */
+    for (ok = 0; ok < 2; ok++)
+        for (i = 0; i < ngames; i++) {
+            int n;
+            if (games[i].found != ok) continue;
+            n = snprintf(buf + len, (size_t)(LIST_MAX - len), "%s\t%s\t%s\t%s\t%s\n", games[i].id, games[i].version,
+                         games[i].path, games[i].program ? games[i].program : "", games[i].found ? "found" : "");
+            if (n > 0 && n < LIST_MAX - len) len += n;   /* a line only whole */
+            else buf[len] = 0;
+        }
     /* SetVar with GVF_SAVE_VAR writes ENVARC: as well as ENV: (3.2, 4.1, AROS). */
     ok = SetVar((STRPTR)LIST_ENV, (STRPTR)buf, len, GVF_GLOBAL_ONLY | GVF_SAVE_VAR) != 0;
     free(buf);
@@ -316,6 +323,10 @@ int install_remove(const Port *p, char *why, int whylen)
                  "Delete it from Workbench if you want it gone.", g->path);
         return 0;
     }
+    if (!g->path[0] || g->path[strlen(g->path) - 1] == ':' || g->path[strlen(g->path) - 1] == '/' || !strchr(g->path, ':')) {
+        snprintf(why, (size_t)whylen, "%s doesn't look like a game's own drawer, so AmiPortAtlas won't delete it.", g->path);
+        return 0;
+    }
     snprintf(cmd, sizeof cmd, "C:Delete \"%s\" ALL QUIET FORCE", g->path);
     if (exists(g->path) && platform_run(cmd) != 0) {
         snprintf(why, (size_t)whylen, "%s could not be deleted. Is the game running?", g->path);
@@ -399,15 +410,19 @@ typedef struct {
     long drawers;
 } Scan;
 
-/* In a matched drawer: its best program; the game remembered */
-static void take(Scan *sc, Port *p, int strength, const char *drawer, const char *name)
+/* In a matched drawer: its best program; the game remembered. 0 when the
+ * drawer has no program of it, so it is looked into instead ("Quake" holding
+ * "Quake/bin/quake", or a drawer of games named like one). */
+static int take(Scan *sc, Port *p, int strength, const char *drawer, const char *name)
 {
-    struct FileInfoBlock *fib = (struct FileInfoBlock *)AllocDosObject(DOS_FIB, NULL);
+    struct FileInfoBlock *fib;
     char best[108], file[400], ver[32];
     int best_score = 0;
     Installed *g;
     BPTR l;
-    if (!fib) return;
+    if (find(p)) return 1;      /* ours from Install, kept as it is; or found once already, the first kept */
+    fib = (struct FileInfoBlock *)AllocDosObject(DOS_FIB, NULL);
+    if (!fib) return 1;
     best[0] = 0;
     l = Lock((STRPTR)drawer, ACCESS_READ);
     if (l && Examine(l, fib)) {
@@ -425,21 +440,20 @@ static void take(Scan *sc, Port *p, int strength, const char *drawer, const char
     }
     if (l) UnLock(l);
     FreeDosObject(DOS_FIB, fib);
-    if (!best[0]) return;
-    g = find(p);
-    if (g) return;              /* ours from Install, kept as it is; or found once already, the first kept */
+    if (!best[0]) return 0;
     (void)strength;
     join(file, sizeof file, drawer, best);
     read_version(file, ver, (int)sizeof ver);
-    if (ngames == MAX_GAMES) return;
+    if (ngames == MAX_GAMES) return 1;
     g = &games[ngames++];
     g->id = dup(p->id);
     g->version = dup(ver);
     g->path = dup(drawer);
     g->program = dup(best);
     g->found = 1;
-    if (!g->id || !g->version || !g->path) { free(g->id); free(g->version); free(g->path); free(g->program); ngames--; return; }
+    if (!g->id || !g->version || !g->path) { free(g->id); free(g->version); free(g->path); free(g->program); ngames--; return 1; }
     sc->found++;
+    return 1;
 }
 
 /* The drawers in dir, to depth more levels: each a game, or looked in */
@@ -462,8 +476,7 @@ static void walk(Scan *sc, const char *dir, int depth, int top)
             join(path, sizeof path, dir, name);
             if (++sc->drawers % 25 == 0 && sc->tell && !sc->tell(sc->user, path, sc->found)) sc->stop = 1;
             p = sc->m ? matcher_find(sc->m, name, &strength) : NULL;
-            if (p) take(sc, p, strength, path, name);
-            else if (depth > 0) walk(sc, path, depth - 1, 0);
+            if ((!p || !take(sc, p, strength, path, name)) && depth > 0) walk(sc, path, depth - 1, 0);
         }
     }
     if (l) UnLock(l);

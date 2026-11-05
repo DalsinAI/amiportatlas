@@ -92,6 +92,9 @@ static void test_feed_small(void)
     CHECK(!port_installable(&f->ports[1]));
     CHECK(strcmp(port_state_text(&f->ports[2]), "Not started") == 0);
     CHECK(port_is_original(&f->ports[2]) && !port_is_original(&f->ports[0]));
+    CHECK(port_plain_name("Kobo") && port_plain_name("Fish Fillets NG"));
+    CHECK(!port_plain_name("") && !port_plain_name(NULL) && !port_plain_name("/") && !port_plain_name("Work:")
+          && !port_plain_name("Games/Kobo") && !port_plain_name("a\"b"));
 
     for (i = 0; i < 3; i++) list[i] = &f->ports[i];
     feed_sort(list, 3, SORT_NUMBER, 0);
@@ -183,6 +186,8 @@ static void test_match(Feed *f)
         CHECK(match_version("$VER: Anarch 1.1d (03.11.2026) AmiCradle", v, sizeof v) && !strcmp(v, "1.1d"));
         CHECK(match_version("$VER: xrick 021212 (02.11.2026) AmiCradle", v, sizeof v) && !strcmp(v, "021212"));
         CHECK(!match_version("$VER: meritous (03.11.2026)", v, sizeof v));
+        CHECK(match_version("$VER: Foo v1.2 (01.01.2026)", v, sizeof v) && !strcmp(v, "1.2"));
+        CHECK(!match_version("$VER: Foo version (01.01.2026)", v, sizeof v));
         CHECK(version_cmp("1.9", "1.10") < 0 && version_cmp("1.10", "1.9") > 0 && version_cmp("1.2", "1.2.1") < 0);
         CHECK(version_cmp("1.15.1", "1.15.1") == 0 && version_cmp("unknown", "1.0") == 0 && version_cmp("1.1d", "1.1") == 0);
         CHECK(version_cmp("1.6.0", "1.6.0 RC2") == 0 && version_cmp("2.30", "2.30 test 4") == 0 &&
