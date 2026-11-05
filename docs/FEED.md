@@ -23,5 +23,8 @@ Each entry (unknown values are `null`; AmiPortAtlas skips keys it doesn't know):
 | `drawer`, `program` | the game's drawer and the icon that starts it |
 | `cpu`, `fpu`, `space`, `modules[]` | the checks before anything is downloaded |
 
+Every other source's index has this same form, with a few more fields
+(`kind`, `short`, `author`, `category`, `install`): [SOURCES.md](SOURCES.md).
+
 `runs_on`, `cpu_floor`, `started_on`, `state_on`, `priority` and the rest
 are read past for now.

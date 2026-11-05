@@ -712,7 +712,7 @@ static int cmd_publish(void)
         }
     }
     if (f) {
-        char today[16];
+        char today[32];
         today_iso(today, (int)sizeof today);
         if (!index_put(f, &e)) { printf("Atlas: out of memory.\n"); goto out; }
         out = feed_write(f, x->name, today, &len);

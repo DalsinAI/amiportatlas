@@ -26,11 +26,21 @@ anything without a release greyed; the buttons bottom right, read last.
   while it runs, and remembered in `ENVARC:AmiPortAtlas/Drawer`.
 - **Remove:** asks, then deletes the game's drawer and icon.
 
+- **Sources:** the list is every source's entries ([SOURCES.md](SOURCES.md));
+  From picks one; an entry from another source shows About, By and Source.
+  Atlas, in C:, does from the Shell what the window does, and publishes.
+
 ## Code
 
 | File | What |
 | --- | --- |
-| `src/feed.c` | the ports.json reader, sorting; plain C, host-tested |
+| `src/json.c` | the small JSON reader every index and the master list use; plain C |
+| `src/feed.c` | an index (ports.json) read, the sources' lists made one, sorting; plain C, host-tested |
+| `src/sources.c` | the master list and the player's own lines; plain C, host-tested |
+| `src/index.c` | readmes read and indexes written, for Atlas PUBLISH; plain C, host-tested |
+| `src/repo.c` | every source read or its saved copy, for the window and Atlas |
+| `src/ftp.c`, `src/net.h` | FTP and FTPS (AUTH TLS) for PUBLISH, on http.c's connections |
+| `src/atlas.c` | Atlas, the Shell command |
 | `src/sha256.c` | SHA-256; plain C, host-tested |
 | `src/http.c` | HTTP/1.1 GET over bsdsocket.library and GFOpenTLS; redirects, chunked |
 | `src/install.c` | checks, install, launch, remove, the installed list |
@@ -54,3 +64,4 @@ anything without a release greyed; the buttons bottom right, read last.
 5. In the feed: the drawer's keep list (saves and settings) so Remove can
    keep them, and per-system downloads for AROS x86 and AmigaOS 4.1.
 6. First build and lab run on origimagic for each target.
+8. The sources' own to-do list: [SOURCES.md](SOURCES.md#still-to-do).

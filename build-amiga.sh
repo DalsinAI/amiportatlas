@@ -4,16 +4,18 @@
 # repository alone and sets STOVE and OUT, so the three repositories it
 # builds on are fetched here at their main (or given as OLUI, OGT, TLS):
 #   DalsinAI/gfopenlayout   GFOpenLayout UI (libolui.a, built here)
-#   DalsinAI/amicradle-guest libraries/opengadtools, the theme reader
 #   DalsinAI/gfopentls      GFOpenTLS's headers
+#   DalsinAI/amicradle-guest libraries/opengadtools, the theme reader: private,
+#                           so Cradle's own checkout of it is used when there is one
 # MIT, Copyright (c) 2026 AmiCradle Team.
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 OUT=${OUT:-$HERE/build/os3}
 STOVE=${STOVE:-$HOME/AmiCradle/stoves/os32-gcc16}
 CC="$STOVE/prefix/bin/m68k-amigaos-gcc"
-DEPS=${DEPS:-$OUT/deps}
+DEPS=${DEPS:-$HERE/build/deps}   # beside the checkout, not among the outputs
 mkdir -p "$OUT" "$DEPS"
+export GIT_TERMINAL_PROMPT=0    # a private repository fails at once rather than waiting for a password
 
 fetch() {   # repo dir [sparse path]
     if [ ! -d "$DEPS/$2/.git" ]; then
@@ -27,7 +29,14 @@ fetch() {   # repo dir [sparse path]
     echo "$1 at $(git -C "$DEPS/$2" rev-parse --short HEAD)"
 }
 if [ -z "${OLUI:-}" ]; then fetch DalsinAI/gfopenlayout gfopenlayout; OLUI=$DEPS/gfopenlayout; fi
+if [ -z "${OGT:-}" ]; then
+    for d in "$HOME"/AmiCradle-dev/cradle-builds/*amicradle-guest* "$HOME"/AmiCradle-dev/cradle-builds/*/amicradle-guest \
+             "$HOME"/AmiCradle-dev/amicradle-guest "$HOME"/AmiCradle/amicradle-guest; do
+        if [ -f "$d/libraries/opengadtools/lib/ogt_theme.c" ]; then OGT=$d/libraries/opengadtools; break; fi
+    done
+fi
 if [ -z "${OGT:-}" ]; then fetch DalsinAI/amicradle-guest amicradle-guest libraries/opengadtools; OGT=$DEPS/amicradle-guest/libraries/opengadtools; fi
+echo "theme reader: $OGT"
 if [ -z "${TLS:-}" ]; then fetch DalsinAI/gfopentls gfopentls; TLS=$DEPS/gfopentls; fi
 
 SPECS=$HERE/specs/m68k-soft-m68040.specs
