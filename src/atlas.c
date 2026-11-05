@@ -2,7 +2,7 @@
  * MIT, (c) 2026 The AmiCradle Team.
  *
  *   Atlas UPDATE                     read every source again
- *   Atlas LIST [ALL|INSTALLED|UPDATES] [SOURCE=id]
+ *   Atlas LIST [ALL|INSTALLED|UPDATES] [FROM=id]
  *   Atlas SEARCH words...            by name, line and id
  *   Atlas SHOW name                  what the sources say about it
  *   Atlas INSTALL names... [TO=drawer] [YES]
@@ -40,9 +40,9 @@ const char atlas_version[] __attribute__((used)) = "$VER: Atlas 0.2 (05.11.2026)
 unsigned long __stack = 65536;   /* libnix swaps to this from the Shell's 4 KB */
 #endif
 
-#define TEMPLATE "COMMAND/A,NAMES/M,TO/K,SOURCE/K,URL/K,NAME/K,UPLOAD/K,README/K,TITLE/K,DRAWER/K," \
+#define TEMPLATE "COMMAND/A,NAMES/M,TO/K,FROM/K,URL/K,NAME/K,UPLOAD/K,README/K,TITLE/K,DRAWER/K," \
                  "PROGRAM/K,VERSION/K,KIND/K,CPU/K,PICTURES/K,FPU/S,INSTALLER/S,YES/S"
-enum { A_COMMAND, A_NAMES, A_TO, A_SOURCE, A_URL, A_NAME, A_UPLOAD, A_README, A_TITLE, A_DRAWER,
+enum { A_COMMAND, A_NAMES, A_TO, A_FROM, A_URL, A_NAME, A_UPLOAD, A_README, A_TITLE, A_DRAWER,
        A_PROGRAM, A_VERSION, A_KIND, A_CPU, A_PICTURES, A_FPU, A_INSTALLER, A_YES, A_COUNT };
 
 #define PUBLISH_VAR "AmiPortAtlas/Publish"   /* "id upload-address" lines */
@@ -182,7 +182,7 @@ static int cmd_update(void)
 static int cmd_list(void)
 {
     const char *what = nnames() ? names()[0] : "AVAILABLE";
-    const char *src = arg(A_SOURCE);
+    const char *src = arg(A_FROM);
     int i, n = 0, mode;
     if (is(what, "ALL")) mode = 0;
     else if (is(what, "INSTALLED")) mode = 2;

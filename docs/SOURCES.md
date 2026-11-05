@@ -91,7 +91,7 @@ the window:
 | Command | What |
 | --- | --- |
 | `Atlas UPDATE` | reads the master list and every source again, and says how many updates there are |
-| `Atlas LIST [ALL\|AVAILABLE\|INSTALLED\|UPDATES] [SOURCE=id]` | what there is (AVAILABLE when none is given) |
+| `Atlas LIST [ALL\|AVAILABLE\|INSTALLED\|UPDATES] [FROM=id]` | what there is (AVAILABLE when none is given) |
 | `Atlas SEARCH words` | entries with every word in their name, line or id |
 | `Atlas SHOW name` | what the sources say about one |
 | `Atlas INSTALL names [TO=drawer] [YES]` | installs, into `ENV:AmiPortAtlas/Drawer` or Work:Games when TO isn't given |
