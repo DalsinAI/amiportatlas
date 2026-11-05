@@ -46,6 +46,11 @@ static struct {
     ULONG src_w, src_h;          /* its own size */
     struct BitMap *pic;          /* the datatype's bitmap, scaled to the box */
     int pic_w, pic_h, box_w, box_h;
+    const Port *pic_port;        /* whose picture it is, and which */
+    int pic_shot;
+    char failed[8][200];         /* pictures that didn't come: not asked for again until a refresh */
+    int nfailed;
+    int offline;                 /* no network for pictures: none fetched until a refresh */
 } A;
 
 /* ---- the pictures ---- */
@@ -64,6 +69,19 @@ static void drop_picture(void)
     A.pic = NULL;
     A.src_w = A.src_h = 0;
     A.box_w = A.box_h = 0;
+    A.pic_port = NULL;
+}
+
+static int failed_before(const char *url)
+{
+    int i;
+    for (i = 0; i < A.nfailed && i < 8; i++) if (strncmp(A.failed[i], url, sizeof A.failed[i] - 1) == 0) return 1;
+    return 0;
+}
+
+static void failed_now(const char *url)
+{
+    snprintf(A.failed[A.nfailed++ % 8], sizeof A.failed[0], "%s", url);
 }
 
 /* The picture scaled to fit w x h, keeping its shape. When the datatype
@@ -133,12 +151,19 @@ static void host_picture(void *data, const Port *p, int shot)
     struct BitMapHeader *bmh = NULL;
     BPTR l;
     (void)data;
+    /* the same picture again (the window was busy, say): only drawn */
+    if (A.dto && p && A.pic_port == p && A.pic_shot == shot) { redraw_shot(); return; }
     drop_picture();
     if (p && shot < p->nshots) {
         cache_name(p->shots[shot], path, (int)sizeof path);
         l = Lock((STRPTR)path, ACCESS_READ);
         if (l) UnLock(l);
-        else if (!http_get_file(p->shots[shot], path, NULL, NULL, NULL, why, (int)sizeof why)) path[0] = 0;
+        else if (A.offline || failed_before(p->shots[shot])) path[0] = 0;   /* don't stall every 5 s */
+        else if (!http_get_file(p->shots[shot], path, NULL, NULL, NULL, why, (int)sizeof why)) {
+            failed_now(p->shots[shot]);
+            if (strstr(why, "network") || strstr(why, "did not answer") || strstr(why, "TCP/IP")) A.offline = 1;
+            path[0] = 0;
+        }
         if (path[0])
             A.dto = NewDTObject((APTR)path, DTA_GroupID, GID_PICTURE, PDTA_Remap, TRUE,
                                 PDTA_Screen, (ULONG)A.win->WScreen, PDTA_DestMode, PMODE_V43,
@@ -146,6 +171,8 @@ static void host_picture(void *data, const Port *p, int shot)
         if (A.dto && GetDTAttrs(A.dto, PDTA_BitMapHeader, (ULONG)&bmh, TAG_DONE) && bmh) {
             A.src_w = bmh->bmh_Width;
             A.src_h = bmh->bmh_Height;
+            A.pic_port = p;
+            A.pic_shot = shot;
         } else if (A.dto) {
             DisposeDTObject(A.dto);
             A.dto = NULL;
@@ -231,6 +258,30 @@ static Feed *load_cached_feed(void)
     return f;
 }
 
+/* The saved pictures deleted, ports.json kept. In this process, as only it
+ * knows where PROGDIR: is; the names first, as ExNext can't run past deletes. */
+static void purge_pictures(void)
+{
+    struct FileInfoBlock *fib = (struct FileInfoBlock *)AllocDosObject(DOS_FIB, NULL);
+    char (*names)[108] = (char (*)[108])malloc(512 * 108), path[160];
+    int n = 0, i;
+    BPTR l;
+    drop_picture();
+    if (fib && names && (l = Lock((STRPTR)CACHE, ACCESS_READ)) != 0) {
+        if (Examine(l, fib))
+            while (n < 512 && ExNext(l, fib))
+                if (fib->fib_DirEntryType < 0 && strcmp((const char *)fib->fib_FileName, "ports.json") != 0)
+                    snprintf(names[n++], 108, "%s", (const char *)fib->fib_FileName);
+        UnLock(l);
+        for (i = 0; i < n; i++) {
+            snprintf(path, sizeof path, CACHE "/%s", names[i]);
+            DeleteFile((STRPTR)path);
+        }
+    }
+    free(names);
+    if (fib) FreeDosObject(DOS_FIB, fib);
+}
+
 static void host_refresh(void *data)
 {
     char why[200];
@@ -246,8 +297,18 @@ static void host_refresh(void *data)
     if (http_get_mem(FEED_URL, FEED_MAX, &text, &len, why, (int)sizeof why)) {
         f = feed_parse(text, len, &bad);
         if (f) {
-            BPTR fh = Open((STRPTR)FEED_CACHE, MODE_NEWFILE);
+            char seen[40];
+            BPTR fh;
+            /* a newer Atlas may have new pictures under the old names: the saved ones go */
+            if (f->generated && (GetVar((STRPTR)"AmiPortAtlas/Generated", (STRPTR)seen, sizeof seen, GVF_GLOBAL_ONLY) < 0
+                                 || strcmp(seen, f->generated) != 0)) {
+                purge_pictures();
+                SetVar((STRPTR)"AmiPortAtlas/Generated", (STRPTR)f->generated, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
+            }
+            fh = Open((STRPTR)FEED_CACHE, MODE_NEWFILE);
             if (fh) { Write(fh, text, len); Close(fh); }
+            A.nfailed = 0;
+            A.offline = 0;
         } else {
             snprintf(why, sizeof why, "The Port Atlas could not be read: %s", bad);
         }
@@ -255,6 +316,7 @@ static void host_refresh(void *data)
     }
     installed_load();
     if (f) {
+        drop_picture();         /* its Port goes with the old feed */
         A.feed = f;
         ui_set_feed(f);
         feed_free(old);
@@ -317,7 +379,10 @@ static int choose_drawer(char *drawer, int max)
             ASLFR_InitialDrawer, (ULONG)drawer, TAG_DONE);
     if (!fr) return 0;
     if (AslRequest(fr, NULL)) {
+        /* fr_Drawer may be relative ("" or "Games"): the full name is kept */
+        BPTR l = Lock(fr->fr_Drawer, ACCESS_READ);
         snprintf(drawer, (size_t)max, "%s", (const char *)fr->fr_Drawer);
+        if (l) { NameFromLock(l, (STRPTR)drawer, max); UnLock(l); }
         SetVar((STRPTR)"AmiPortAtlas/Drawer", (STRPTR)drawer, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
         ok = 1;
     }

@@ -164,7 +164,13 @@ long platform_free_kb(CONST_STRPTR path)
         if (Info(lock, id)) {
             ULONG freeb = (ULONG)(id->id_NumBlocks - id->id_NumBlocksUsed);
             ULONG bpb = (ULONG)id->id_BytesPerBlock;
-            kb = (long)(freeb * (bpb / 256) / 4);
+            /* in KB without passing 32 bits: a 1 TB drive has 2^31 512-byte blocks */
+            if (bpb >= 1024) {
+                ULONG per = bpb / 1024;
+                kb = freeb > 0x7FFFFFFFUL / per ? 0x7FFFFFFFL : (long)(freeb * per);
+            } else if (bpb > 0) {
+                kb = (long)(freeb / (1024 / bpb));
+            }
         }
         UnLock(lock);
     }

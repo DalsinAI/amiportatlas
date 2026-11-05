@@ -278,12 +278,13 @@ typedef struct {
     Sha256 sha;
     HttpSink progress;
     void *user;
+    int write_failed;
 } FileJob;
 
 static int file_sink(void *user, const char *data, long len, long done, long total)
 {
     FileJob *j = (FileJob *)user;
-    if (Write(j->fh, (APTR)data, len) != len) return 0;
+    if (Write(j->fh, (APTR)data, len) != len) { j->write_failed = 1; return 0; }
     sha256_update(&j->sha, data, (unsigned long)len);
     return j->progress ? j->progress(j->user, data, len, done, total) : 1;
 }
@@ -301,8 +302,10 @@ int http_get_file(const char *url, const char *path, const char *sha256,
     sha256_init(&j.sha);
     j.progress = progress;
     j.user = user;
+    j.write_failed = 0;
     ok = http_get(url, file_sink, &j, why, whylen);
     Close(j.fh);
+    if (j.write_failed) snprintf(why, (size_t)whylen, "%s could not be written. Is the disk full?", part);
     if (ok && sha256) {
         sha256_final(&j.sha, digest);
         if (!sha256_matches(digest, sha256)) {
@@ -324,19 +327,20 @@ int http_get_file(const char *url, const char *path, const char *sha256,
 typedef struct {
     char *buf;
     long len, cap, max;
+    int too_big, no_memory;
 } MemJob;
 
 static int mem_sink(void *user, const char *data, long len, long done, long total)
 {
     MemJob *m = (MemJob *)user;
     (void)done;
-    if (m->len + len > m->max) return 0;
+    if (m->len + len > m->max) { m->too_big = 1; return 0; }
     if (m->len + len + 1 > m->cap) {
         long cap = m->cap ? m->cap : (total > 0 && total < m->max ? total + 1 : 65536);
         char *n;
         while (cap < m->len + len + 1) cap *= 2;
         n = (char *)realloc(m->buf, (size_t)cap);
-        if (!n) return 0;
+        if (!n) { m->no_memory = 1; return 0; }
         m->buf = n;
         m->cap = cap;
     }
@@ -351,7 +355,8 @@ int http_get_mem(const char *url, long max, char **out, long *len, char *why, in
     memset(&m, 0, sizeof m);
     m.max = max;
     if (!http_get(url, mem_sink, &m, why, whylen)) {
-        if (m.len >= max) say(why, whylen, "The file is larger than expected.");
+        if (m.too_big) say(why, whylen, "The file is larger than expected.");
+        else if (m.no_memory) say(why, whylen, "There isn't the memory to read it.");
         free(m.buf);
         return 0;
     }

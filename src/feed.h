@@ -53,8 +53,10 @@ extern int feed_utf8;
 Feed *feed_parse(const char *text, long len, const char **why);
 void  feed_free(Feed *feed);
 
-/* A port can be installed when the feed gives a download for it. */
+/* A port can be installed when the feed gives a download for it, and its id,
+ * drawer and program are plain names (no ':' or '/', not empty). */
 int   port_installable(const Port *p);
+int   port_plain_name(const char *s);
 
 /* Sorting the list. */
 enum { SORT_NUMBER, SORT_NAME, SORT_YEAR, SORT_STATE, SORT_FIT, SORT_COUNT };

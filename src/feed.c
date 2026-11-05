@@ -382,10 +382,19 @@ Feed *feed_parse(const char *text, long len, const char **why)
     return f;
 }
 
+/* A name made into a path under T: or the drawer picked: one plain name, never
+ * "" (the parent itself, which Remove would delete) nor one with ':' or '/'. */
+int port_plain_name(const char *s)
+{
+    if (!s || !*s || strlen(s) > 100) return 0;
+    for (; *s; s++) if (*s == ':' || *s == '/' || *s == '"' || (unsigned char)*s < ' ') return 0;
+    return 1;
+}
+
 int port_installable(const Port *p)
 {
     return p->download_url && p->download_url[0] && p->download_sha256 && strlen(p->download_sha256) == 64
-        && p->drawer && p->program;
+        && port_plain_name(p->id) && port_plain_name(p->drawer) && port_plain_name(p->program);
 }
 
 int port_is_original(const Port *p)
