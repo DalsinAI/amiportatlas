@@ -12,6 +12,21 @@
 
 #define KEY(name) (strcmp(key, name) == 0)
 
+/* true or false, or a string saying which (the Atlas writes "68881 (the
+ * 68040 FPU)" for a game that needs one): any string but "" is true. */
+static int flag(JsonReader *r, int *out)
+{
+    char *s;
+    while (r->p < r->end && (*r->p == ' ' || *r->p == '\t' || *r->p == '\n' || *r->p == '\r')) r->p++;
+    if (r->p < r->end && *r->p == '"') {
+        if (!json_string(r, &s, 0)) return 0;
+        *out = s[0] != 0;
+        free(s);
+        return 1;
+    }
+    return json_boolean(r, out);
+}
+
 static int port(JsonReader *r, Port *p)
 {
     memset(p, 0, sizeof *p);
@@ -40,7 +55,7 @@ static int port(JsonReader *r, Port *p)
         else if (KEY("drawer"))          ok = json_string(r, &p->drawer, 1);
         else if (KEY("program"))         ok = json_string(r, &p->program, 1);
         else if (KEY("cpu"))             ok = json_string(r, &p->cpu, 1);
-        else if (KEY("fpu"))             ok = json_boolean(r, &p->fpu);
+        else if (KEY("fpu"))             ok = flag(r, &p->fpu);
         else if (KEY("space"))           ok = json_number(r, &p->space);
         else if (KEY("requires"))        ok = json_strings(r, &p->requires, &p->nrequires);
         else if (KEY("modules"))         ok = json_strings(r, &p->modules, &p->nmodules);

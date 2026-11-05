@@ -72,7 +72,8 @@ static void test_feed_small(void)
         "     \"runs_on\": [\"68040\", \"AC090\"], \"future_field\": {\"a\": [true, false]} },\n"
         "   { \"id\": \"g-a\", \"number\": 1, \"title\": \"Alpha \xE2\x80\xA6\", \"year\": null, \"state\": \"testing\",\n"
         "     \"fit\": \"GPU\", \"download_url\": null, \"requires\": [], \"screenshot\": \"https://example.org/a.png\" },\n"
-        "   { \"id\": \"g-c\", \"origin\": \"original\", \"number\": 3, \"title\": \"gamma\", \"year\": \"1987\", \"state\": \"not_started\", \"fit\": \"060\" },\n"
+        "   { \"id\": \"g-c\", \"origin\": \"original\", \"number\": 3, \"title\": \"gamma\", \"year\": \"1987\", \"state\": \"not_started\", \"fit\": \"060\",\n"
+        "     \"fpu\": \"68881 (the 68040 FPU)\" },\n"
         "   { \"id\": \"g-none\", \"number\": 4 }\n"
         "  ] }";
     const char *why = NULL;
@@ -94,6 +95,7 @@ static void test_feed_small(void)
     CHECK(!port_installable(&f->ports[1]));
     CHECK(strcmp(port_state_text(&f->ports[2]), "Not started") == 0);
     CHECK(port_is_original(&f->ports[2]) && !port_is_original(&f->ports[0]));
+    CHECK(f->ports[2].fpu == 1 && f->ports[1].fpu == 0);   /* the Atlas says which FPU as a string */
     CHECK(port_plain_name("Kobo") && port_plain_name("Fish Fillets NG"));
     CHECK(!port_plain_name("") && !port_plain_name(NULL) && !port_plain_name("/") && !port_plain_name("Work:")
           && !port_plain_name("Games/Kobo") && !port_plain_name("a\"b"));

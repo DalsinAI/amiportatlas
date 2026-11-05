@@ -35,7 +35,7 @@
 #include "index.h"
 #include "sha256.h"
 
-static const char vers[] = "$VER: Atlas 0.2 (05.11.2026) The AmiCradle Team";
+const char atlas_version[] __attribute__((used)) = "$VER: Atlas 0.2 (05.11.2026) The AmiCradle Team";
 #if !defined(__amigaos4__) && !defined(__AROS__)
 unsigned long __stack = 65536;   /* libnix swaps to this from the Shell's 4 KB */
 #endif
@@ -742,7 +742,6 @@ int main(void)
     struct RDArgs *rd;
     const char *missing = NULL, *c;
     int rc = RETURN_FAIL;
-    (void)vers;
     if (!platform_open(&missing)) { printf("Atlas needs %s.\n", missing); return RETURN_FAIL; }
     rd = ReadArgs((STRPTR)TEMPLATE, args, NULL);
     if (!rd) {
