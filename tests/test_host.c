@@ -126,6 +126,25 @@ static void test_feed_small(void)
     feed_utf8 = 0;
 }
 
+static void test_picture_name(void)
+{
+    char a[32], b[32], c[32];
+    port_picture_name("https://www.amicradle.com/ports/assets/shots/cdogs.png", a, (int)sizeof a);
+    port_picture_name("https://aminet.net/pics/cdogs.png", b, (int)sizeof b);
+    CHECK(strlen(a) == 20 && strcmp(a + 16, ".png") == 0);
+    CHECK(strcmp(a, b) != 0);                       /* the same last name, two files */
+    port_picture_name("https://www.amicradle.com/ports/assets/shots/cdogs.png", c, (int)sizeof c);
+    CHECK(strcmp(a, c) == 0);                       /* the same URL, the same file */
+    port_picture_name("https://www.amicradle.com/ports/assets/shots/cdogs.png?v=1a2b", c, (int)sizeof c);
+    CHECK(strcmp(a, c) != 0 && strcmp(c + 16, ".png") == 0);   /* a new version is a new file */
+    port_picture_name("https://example.org/Shot.JPG#x", c, (int)sizeof c);
+    CHECK(strcmp(c + 16, ".jpg") == 0);
+    port_picture_name("https://example.org/get?id=5", c, (int)sizeof c);
+    CHECK(strlen(c) == 16);                          /* no extension, none made up */
+    port_picture_name("https://example.org/a.b:c/d", c, (int)sizeof c);
+    CHECK(strlen(c) == 16 && !strchr(c, ':'));
+}
+
 static void test_feed_bad(void)
 {
     const char *bad[] = {
@@ -446,6 +465,7 @@ int main(int argc, char **argv)
     test_sha256();
     test_feed_small();
     test_feed_bad();
+    test_picture_name();
     test_sources();
     test_merge();
     test_index();

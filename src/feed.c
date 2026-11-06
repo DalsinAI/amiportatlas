@@ -9,6 +9,7 @@
 #include <string.h>
 #include "feed.h"
 #include "json.h"
+#include "sha256.h"
 
 #define KEY(name) (strcmp(key, name) == 0)
 
@@ -238,6 +239,40 @@ int port_plain_name(const char *s)
     if (!s || !*s || strlen(s) > 100) return 0;
     for (; *s; s++) if (*s == ':' || *s == '/' || *s == '"' || (unsigned char)*s < ' ') return 0;
     return 1;
+}
+
+void port_picture_name(const char *url, char *out, int max)
+{
+    static const char digits[] = "0123456789abcdef";
+    unsigned char d[32];
+    char ext[8];
+    const char *base, *dot = NULL, *q;
+    int i, n = 0;
+    Sha256 s;
+    sha256_init(&s);
+    sha256_update(&s, url, (unsigned long)strlen(url));
+    sha256_final(&s, d);
+    /* the extension of the URL's last name, before any ?query or #part */
+    base = strrchr(url, '/');
+    base = base ? base + 1 : url;
+    for (q = base; *q && *q != '?' && *q != '#'; q++) if (*q == '.') dot = q;
+    ext[0] = 0;
+    if (dot) {
+        for (q = dot + 1; *q && *q != '?' && *q != '#'; q++) {
+            char c = *q;
+            if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+            if (n >= 4 || !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))) { n = -1; break; }
+            ext[1 + n++] = c;
+        }
+        if (n > 0) { ext[0] = '.'; ext[1 + n] = 0; } else ext[0] = 0;
+    }
+    if (max < 1) return;
+    for (i = 0; i < 8 && 2 * i + 1 < max - 1; i++) {
+        out[2 * i] = digits[d[i] >> 4];
+        out[2 * i + 1] = digits[d[i] & 15];
+    }
+    out[2 * i] = 0;
+    if ((int)(strlen(out) + strlen(ext)) < max) strcat(out, ext);
 }
 
 int port_installable(const Port *p)
