@@ -119,6 +119,21 @@ static void set_text(const char *id, const char *text)
 
 static const char *installed(const Port *p) { return H && H->installed ? H->installed(H->data, p) : NULL; }
 
+/* A release address as the facts show it: a release's tag, else the
+ * address without https:// and www. (Release page opens the whole one). */
+static const char *short_url(const char *u)
+{
+    const char *t;
+    if (!u) return NULL;
+    t = strstr(u, "/releases/tag/");
+    if (t && t[14]) return t + 14;
+    if (strncmp(u, "https://", 8) == 0) u += 8;
+    else if (strncmp(u, "http://", 7) == 0) u += 7;
+    if (strncmp(u, "www.", 4) == 0) u += 4;
+    if (strncmp(u, "github.com/", 11) == 0) u += 11;
+    return u;
+}
+
 static int is_update(const Port *p)
 {
     const char *v = installed(p);
@@ -305,7 +320,7 @@ static void select_port(Port *p)
         else line[0] = 0;
         fact("size", line);
         fact("data", p->game_data);
-        fact("release", p->release_url ? p->release_url : p->port_repo);
+        fact("release", short_url(p->release_url ? p->release_url : p->port_repo));
         fact("about", p->summary);
         fact("by", p->author);
         /* the Atlas's own entries look as they did; another source's says which */

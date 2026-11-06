@@ -536,7 +536,7 @@ int main(void)
     feed_utf8 = 1;  /* olui takes UTF-8 */
     if (!platform_open(&missing)) { printf("AmiPortAtlas needs %s.\n", missing); goto out; }
     A.win = OpenWindowTags(NULL, WA_Title, (ULONG)"AmiPortAtlas", WA_ScreenTitle, (ULONG)(vers + 6),
-                           WA_Width, 1000, WA_Height, 620, WA_MinWidth, 760, WA_MinHeight, 460,
+                           WA_Width, 1100, WA_Height, 680, WA_MinWidth, 760, WA_MinHeight, 460,
                            WA_MaxWidth, ~0UL, WA_MaxHeight, ~0UL, WA_AutoAdjust, TRUE,
                            WA_DragBar, TRUE, WA_DepthGadget, TRUE, WA_CloseGadget, TRUE, WA_SizeGadget, TRUE,
                            WA_Activate, TRUE, WA_SimpleRefresh, TRUE, WA_ReportMouse, TRUE,
