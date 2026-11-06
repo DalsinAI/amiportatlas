@@ -31,6 +31,7 @@
 #include "ui.h"
 
 #define CACHE      "PROGDIR:Cache"
+#define PICTURES   CACHE "/Pictures"   /* kept until the Atlas stops naming them */
 
 static const char vers[] = "$VER: AmiPortAtlas 0.2 (06.11.2026) The AmiCradle Team";
 
@@ -52,6 +53,9 @@ static struct {
     int nfailed;
     int offline;                 /* no network for pictures: none fetched until a refresh */
 } A;
+
+static void drop_old_pictures(void);
+static int all_fresh(void);
 
 /* ---- the pictures ---- */
 
@@ -141,8 +145,9 @@ static void redraw_shot(void)
 
 static void cache_name(const char *url, char *out, int max)
 {
-    const char *base = strrchr(url, '/');
-    snprintf(out, (size_t)max, CACHE "/%s", base ? base + 1 : url);
+    char name[32];
+    port_picture_name(url, name, (int)sizeof name);
+    snprintf(out, (size_t)max, PICTURES "/%s", name);
 }
 
 static void host_picture(void *data, const Port *p, int shot)
@@ -250,6 +255,14 @@ static void share_cache(void)
     if (NameFromLock(l, (STRPTR)path, sizeof path))
         SetVar((STRPTR)"AmiPortAtlas/Cache", (STRPTR)path, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
     UnLock(l);
+    l = Lock((STRPTR)PICTURES, ACCESS_READ);
+    if (!l) {
+        /* AmiPortAtlas 0.2.0 and older kept pictures beside the sources'
+         * copies, under the URL's last name: those go, once */
+        drop_old_pictures();
+        l = CreateDir((STRPTR)PICTURES);
+    }
+    if (l) UnLock(l);
 }
 
 static void repo_tell(void *user, const char *line) { (void)user; status(line); }
@@ -282,26 +295,74 @@ static int json_name(const char *name)
     return n > 5 && strcmp(name + n - 5, ".json") == 0;
 }
 
-static void purge_pictures(void)
+/* The names of the files in a drawer, in *names (malloc'd, *n of them). */
+static int list_files(const char *dir, char (**names)[40], int *n)
 {
     struct FileInfoBlock *fib = (struct FileInfoBlock *)AllocDosObject(DOS_FIB, NULL);
-    char (*names)[108] = (char (*)[108])malloc(512 * 108), path[160];
-    int n = 0, i;
+    int cap = 0;
     BPTR l;
-    drop_picture();
-    if (fib && names && (l = Lock((STRPTR)CACHE, ACCESS_READ)) != 0) {
+    *names = NULL;
+    *n = 0;
+    if (!fib) return 0;
+    if ((l = Lock((STRPTR)dir, ACCESS_READ)) != 0) {
         if (Examine(l, fib))
-            while (n < 512 && ExNext(l, fib))
-                if (fib->fib_DirEntryType < 0 && !json_name((const char *)fib->fib_FileName))
-                    snprintf(names[n++], 108, "%s", (const char *)fib->fib_FileName);
+            while (ExNext(l, fib)) {
+                if (fib->fib_DirEntryType >= 0 || strlen((const char *)fib->fib_FileName) >= 40) continue;
+                if (*n == cap) {
+                    char (*more)[40] = (char (*)[40])realloc(*names, (size_t)(cap ? cap * 2 : 256) * 40);
+                    if (!more) break;
+                    *names = more;
+                    cap = cap ? cap * 2 : 256;
+                }
+                snprintf((*names)[(*n)++], 40, "%s", (const char *)fib->fib_FileName);
+            }
         UnLock(l);
-        for (i = 0; i < n; i++) {
+    }
+    FreeDosObject(DOS_FIB, fib);
+    return 1;
+}
+
+static void drop_old_pictures(void)
+{
+    char (*names)[40], path[160];
+    int n, i;
+    list_files(CACHE, &names, &n);
+    for (i = 0; i < n; i++)
+        if (!json_name(names[i])) {
             snprintf(path, sizeof path, CACHE "/%s", names[i]);
+            DeleteFile((STRPTR)path);
+        }
+    free(names);
+}
+
+static int by_name(const void *a, const void *b) { return strcmp((const char *)a, (const char *)b); }
+
+/* Saved pictures stay from one Atlas to the next. The ones no source names
+ * any more go, so the drawer doesn't grow for ever. Only called when every
+ * source was just read, or a source that failed would lose its pictures. */
+static void prune_pictures(const Feed *f)
+{
+    char (*names)[40], (*keep)[40] = NULL, path[160];
+    long want = 0, k = 0;
+    int n, i, j;
+    for (i = 0; i < f->count; i++) want += f->ports[i].nshots;
+    if (want > 0 && (keep = (char (*)[40])malloc((size_t)want * 40)) == NULL) return;
+    for (i = 0; i < f->count; i++)
+        for (j = 0; j < f->ports[i].nshots; j++)
+            port_picture_name(f->ports[i].shots[j], keep[k++], 40);
+    if (k > 1) qsort(keep, (size_t)k, 40, by_name);
+    list_files(PICTURES, &names, &n);
+    for (i = 0; i < n; i++) {
+        size_t len = strlen(names[i]);
+        /* a .part is a fetch that never finished */
+        if ((len > 5 && strcmp(names[i] + len - 5, ".part") == 0)
+            || !k || !bsearch(names[i], keep, (size_t)k, 40, by_name)) {
+            snprintf(path, sizeof path, PICTURES "/%s", names[i]);
             DeleteFile((STRPTR)path);
         }
     }
     free(names);
-    if (fib) FreeDosObject(DOS_FIB, fib);
+    free(keep);
 }
 
 /* Every source read again (fetch), or the saved copies (at start, before
@@ -315,18 +376,12 @@ static void read_sources(int fetch)
     f = repo_read(fetch, &s, repo_tell, NULL, why, (int)sizeof why);
     installed_load();
     if (f) {
-        char seen[40];
-        /* a newer Atlas may have new pictures under the old names: the saved ones go */
-        if (fetch && f->generated && (GetVar((STRPTR)"AmiPortAtlas/Generated", (STRPTR)seen, sizeof seen, GVF_GLOBAL_ONLY) < 0
-                                      || strcmp(seen, f->generated) != 0)) {
-            purge_pictures();
-            SetVar((STRPTR)"AmiPortAtlas/Generated", (STRPTR)f->generated, -1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
-        }
         A.nfailed = 0;
         A.offline = 0;
         drop_picture();         /* its Port goes with the old feed */
         A.feed = f;
         set_sources(s);
+        if (fetch && all_fresh()) prune_pictures(f);
         ui_set_feed(f);
         feed_free(old);
         repo_summary(A.sources, line, (int)sizeof line);

@@ -23,6 +23,12 @@ Each entry (unknown values are `null`; AmiPortAtlas skips keys it doesn't know):
 | `drawer`, `program` | the game's drawer and the icon that starts it |
 | `cpu`, `fpu`, `space`, `modules[]` | the checks before anything is downloaded |
 
+Pictures are saved in `PROGDIR:Cache/Pictures` the first time they are
+shown, one file per URL, and kept from one feed to the next: a saved
+picture is never fetched again. Ones no source names any more are deleted
+when every source has just been read. So a picture that changes needs a new
+URL; the Port Atlas adds `?v=` and the first digits of the file's SHA-256.
+
 Every other source's index has this same form, with a few more fields
 (`kind`, `short`, `author`, `category`, `install`): [SOURCES.md](SOURCES.md).
 

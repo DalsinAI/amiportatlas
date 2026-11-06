@@ -68,6 +68,11 @@ void  port_free(Port *p);
 int   port_installable(const Port *p);
 int   port_plain_name(const char *s);
 
+/* A picture's file name in the cache: 16 hex digits of its URL's SHA-256 and
+ * the URL's extension ("3f2a...c1.png"), so two sources' "shot1.png" never
+ * share a file, and a picture at a new URL is a new file. max >= 22. */
+void  port_picture_name(const char *url, char *out, int max);
+
 /* The Port Atlas's source: its ids stay as they are, as the installed list
  * from AmiPortAtlas 0.1 names games by them. Another source's ids become
  * "id@source", so the same name in two sources stays two entries. */
