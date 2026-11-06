@@ -1,13 +1,30 @@
 # AmiPortAtlas
 
-Pick a game from the AmiCradle Port Atlas, then download, install and play
-it. AmiPortAtlas lists every game in the Atlas, ports and our own games
-such as Canvas Skies, with their state, fit, screenshots and release pages.
-A game with a release installs with one click, through the same Installer
-script a hand install uses.
+**Every Amiga game and program we know of, in one window.**
 
-It runs on AmigaOS 3.2.3, GFOS (3.2.3 with GFOpenUp and the GFOpenKick ROM),
-AROS and AmigaOS 4.1.
+AmiPortAtlas is the app store your Amiga never had. Open it and the whole
+AmiCradle Port Atlas is there: more than 1,600 games and programs, with
+their pictures, what they need and how far along each port is. Pick one,
+click **Install...**, and it downloads, checks and installs itself, ready to
+play. When a new version comes out, AmiPortAtlas tells you and updates it
+in one click.
+
+And it doesn't stop at our own ports. Like APT on Linux, AmiPortAtlas reads
+**sources**: the Port Atlas, the sources in our master list (Aminet,
+OS4Depot, MorphOS-Storage, AROS Archives as their readers arrive) and any
+source you add yourself. They all show up as one list you can search, sort
+and filter.
+
+For the Shell, there's **Atlas**: `Atlas UPDATE`, `Atlas SEARCH`,
+`Atlas INSTALL`, `Atlas UPGRADE`, the commands you'd expect from a package
+manager, on a 68040. Made something yourself? `Atlas PUBLISH` puts it in
+your own source over FTP or FTPS, and can send it to Aminet too.
+
+![AmiPortAtlas showing Neverball, installed and ready to play](docs/images/amiportatlas-window.png)
+
+![Atlas in a Shell: the sources, an update, a search](docs/images/atlas-shell.png)
+
+[docs/HOWTO.md](docs/HOWTO.md) shows how to install it and use it.
 
 ## What it needs
 
