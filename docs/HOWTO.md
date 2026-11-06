@@ -5,7 +5,7 @@
 You need AmigaOS 3.2 or later (or GFOS), a 68040 or better and a TCP/IP
 stack (bsdsocket.library).
 
-1. Unpack `AmiPortAtlas-0.2.0.lha` with LhA or OpenCompress, e.g. into RAM:.
+1. Unpack `AmiPortAtlas-0.2.1.lha` with LhA or OpenCompress, e.g. into RAM:.
 2. Copy the `AmiPortAtlas` drawer anywhere, for example to `Work:`.
 3. Copy `C/Atlas` to `C:`, for the Shell command.
 4. Copy `Libs/gfopentls.library` to `LIBS:`.
