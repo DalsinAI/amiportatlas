@@ -147,7 +147,37 @@ int main(int argc, char **argv)
         ui_select_row(kobo);
     }
     for (len = 0; len < 50; len++) ui_tick();   /* 5 s: one picture on, when it has two */
-    ui_status("www.amicradle.com/ports/ports.json read at 05:10");
+    /* Two sources: the Atlas and a small index of another's, one list. */
+    {
+        static const char extra[] = "{\"schema_version\":1,\"ports\":[{\"id\":\"tiny\",\"title\":\"Tiny Tetris\","
+            "\"short\":\"Falling blocks\",\"author\":\"Someone\",\"version\":\"1.0\",\"state\":\"released\"}]}";
+        static const char *const ids[2] = { ATLAS_SOURCE, "aminet-game" };
+        static const char *const names[2] = { "AmiCradle Port Atlas", "Aminet: games" };
+        Feed *two[2];
+        Feed *merged;
+        int count = feed->count, i, tiny = -1;
+        two[0] = feed;
+        two[1] = feed_parse(extra, (long)sizeof extra - 1, &why);
+        CHECK(two[1] != NULL);
+        merged = feed_merge(two, ids, 2);
+        CHECK(merged != NULL && merged->count == count + 1);
+        feed = merged;
+        ui_set_sources(ids, names, 2);
+        ui_set_feed(feed);
+        CHECK(ui_rows() == count + 1);
+        CHECK(ui_selected() && ui_selected()->number == 1);   /* the Atlas's first */
+        for (i = 0; i < ui_rows(); i++) {
+            ui_select_row(i);
+            if (ui_selected() && strcmp(ui_selected()->title, "Tiny Tetris") == 0) { tiny = i; break; }
+        }
+        CHECK(tiny == ui_rows() - 1);   /* no number: after the Atlas's */
+        CHECK(ui_selected() && strcmp(ui_selected()->id, "tiny@aminet-game") == 0);
+        for (i = 0; i < ui_rows(); i++) {
+            ui_select_row(i);
+            if (ui_selected() && strcmp(ui_selected()->title, "Kobo Deluxe") == 0) break;
+        }
+    }
+    ui_status("4 sources: 415 of 415 shown, 1 to install");
     CHECK(olui_layout(ui, w, h));
     CHECK(olui_box(ui, olui_find(ui, "shot"), &r));
 

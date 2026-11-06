@@ -25,6 +25,7 @@ typedef struct UiHost {
     void (*open_url)(void *data, const char *url);
     void (*refresh)(void *data);                              /* Check for updates */
     void (*scan)(void *data);                                 /* Find installed */
+    const char *(*source_name)(void *data, const char *id);   /* a source's name, for the facts */
 } UiHost;
 
 /* Makes the window's contents in ui (after the theme's CSS is added). */
@@ -32,6 +33,9 @@ int  ui_build(olui *ui, UiHost *host, char *err, size_t errlen);
 
 /* A new feed (the old one is the caller's to free afterwards). */
 void ui_set_feed(Feed *feed);
+/* The sources for the From choice: ids[i] is named names[i] (both kept by
+ * the caller until the next call). "All sources" comes first. */
+void ui_set_sources(const char *const *ids, const char *const *names, int n);
 /* The list again, as after an install or a removal. */
 void ui_refill(void);
 

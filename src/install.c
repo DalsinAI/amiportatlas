@@ -6,6 +6,8 @@
  * scripts/port_installer.py. AmiPortAtlas unpacks it into T: and runs that
  * script, so an install from here and one by hand do the same thing. The
  * drawer the player picked is handed to the script in ENV:AmiPortAtlas/Parent.
+ * An entry from another source with "install": "unpack" (most of Aminet's
+ * archives have no such script) has its drawer and icon copied instead.
  */
 #include "platform.h"
 
@@ -230,6 +232,64 @@ static void tidy(const char *dir, const char *archive)
     if (archive && archive[0]) DeleteFile((STRPTR)archive);
 }
 
+/* AmigaDOS names are the same whatever their case. */
+static int same_path(const char *a, const char *b)
+{
+    for (; *a && *b; a++, b++) {
+        char x = *a, y = *b;
+        if (x >= 'A' && x <= 'Z') x += 32;
+        if (y >= 'A' && y <= 'Z') y += 32;
+        if (x != y) return 0;
+    }
+    return *a == *b;
+}
+
+/* An archive with no Installer script of ours (most of Aminet's): its
+ * drawer, and that drawer's icon, are copied into parent as they are. */
+static int install_copy(const Port *p, const char *parent, const char *dir, const char *archive,
+                        StepFn step, void *user, char *why, int whylen)
+{
+    char from[300], dest[300], cmd[800];
+    step(user, STEP_INSTALL, 0, 0);
+    join(from, sizeof from, dir, p->drawer);
+    join(dest, sizeof dest, parent, p->drawer);
+    if (!exists(from)) {
+        snprintf(why, (size_t)whylen, "The archive has no %s drawer.", p->drawer);
+        tidy(dir, archive);
+        return 0;
+    }
+    /* an update copies over the copy installed from here; anything else there is left alone */
+    if (exists(dest) && !(installed_path(p) && !installed_found(p) && same_path(installed_path(p), dest))) {
+        snprintf(why, (size_t)whylen, "%s is there already. Remove it first, or pick another drawer.", dest);
+        tidy(dir, archive);
+        return 0;
+    }
+    snprintf(cmd, sizeof cmd, "C:Copy \"%s\" TO \"%s\" ALL CLONE QUIET", from, dest);
+    if (platform_run(cmd) != 0) {
+        snprintf(why, (size_t)whylen, "%s could not be copied into %s.", p->drawer, parent);
+        tidy(dir, archive);
+        return 0;
+    }
+    snprintf(from + strlen(from), sizeof from - strlen(from), ".info");
+    if (exists(from)) {
+        snprintf(cmd, sizeof cmd, "C:Copy \"%s\" TO \"%s.info\" CLONE QUIET", from, dest);
+        platform_run(cmd);
+    }
+    join(cmd, sizeof cmd, dest, p->program);
+    if (!exists(cmd)) {
+        snprintf(why, (size_t)whylen, "%s was copied, but %s isn't in it.", p->drawer, p->program);
+        tidy(dir, archive);
+        return 0;
+    }
+    step(user, STEP_TIDY, 0, 0);
+    tidy(dir, archive);
+    if (!remember(p, dest)) {
+        snprintf(why, (size_t)whylen, "%s is installed in %s, but ENVARC:" LIST_ENV " could not be written.", p->title, dest);
+        return 0;
+    }
+    return 1;
+}
+
 int install_run(const Port *p, const char *parent, StepFn step, HttpSink progress,
                 void *user, char *why, int whylen)
 {
@@ -257,6 +317,7 @@ int install_run(const Port *p, const char *parent, StepFn step, HttpSink progres
         tidy(dir, archive);
         return 0;
     }
+    if (port_unpack_only(p)) return install_copy(p, parent, dir, archive, step, user, why, whylen);
     join(script, sizeof script, dir, "Install-");
     strncat(script, p->drawer, sizeof script - strlen(script) - 1);
     if (!exists(script)) {

@@ -1,0 +1,25 @@
+{
+ "schema_version": 1,
+ "generated": "2026-11-05",
+ "note": "The master list of sources AmiPortAtlas and Atlas read, from DalsinAI/amiportatlas main. docs/SOURCES.md has the fields. A source with no index yet is listed and read once its index is up.",
+ "sources": [
+  {"id": "amicradle", "name": "AmiCradle Port Atlas", "index": "https://www.amicradle.com/ports/ports.json",
+   "home": "https://www.amicradle.com/ports/", "on": true, "checked": true, "pictures": true,
+   "systems": ["os3", "gfos", "aros-m68k"], "note": "Our ports and our own games, with screenshots and one-click installs."},
+  {"id": "aminet-game", "name": "Aminet: games", "index": null, "home": "https://aminet.net/tree?path=game",
+   "on": true, "checked": false, "pictures": false, "systems": ["os3", "gfos", "aros-m68k"],
+   "note": "Aminet's game drawers. Its index comes from the Aminet reader, still to be written."},
+  {"id": "aminet-util", "name": "Aminet: utilities", "index": null, "home": "https://aminet.net/tree?path=util",
+   "on": false, "checked": false, "pictures": false, "systems": ["os3", "gfos", "aros-m68k"],
+   "note": "Aminet's utility drawers. Its index comes from the Aminet reader, still to be written."},
+  {"id": "os4depot", "name": "OS4Depot", "index": null, "home": "https://os4depot.net/",
+   "on": true, "checked": false, "pictures": true, "systems": ["os4"],
+   "note": "Software for AmigaOS 4. Its index comes from the OS4Depot reader, still to be written."},
+  {"id": "morphos-storage", "name": "MorphOS-Storage", "index": null, "home": "https://www.morphos-storage.net/",
+   "on": true, "checked": false, "pictures": true, "systems": ["morphos"],
+   "note": "Software for MorphOS. Its index comes from the MorphOS-Storage reader, still to be written."},
+  {"id": "aros-archives", "name": "AROS Archives", "index": null, "home": "https://archives.aros-exec.org/",
+   "on": true, "checked": false, "pictures": true, "systems": ["aros-m68k", "aros-x86"],
+   "note": "Software for AROS. Its index comes from the AROS Archives reader, still to be written."}
+ ]
+}

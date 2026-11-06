@@ -25,11 +25,13 @@ static const char markup[] =
 "   <option>Installed</option><option>Updates</option></select>"
 "  <label for=fit>Fit</label>"
 "  <select id=fit><option>Any</option><option>040</option><option>060</option><option>GPU</option></select>"
+"  <label for=from>From</label>"
+"  <select id=from title='Every source, or one of them'><option>All sources</option></select>"
 "  <label for=sort>Sort by</label>"
 "  <select id=sort><option>Number</option><option>Name</option><option>Year</option>"
 "   <option>State</option><option>Fit</option></select>"
 "  <button id=scan title='Look on DH0: to DH15: for games that are already installed'>Find installed</button>"
-"  <button id=updates title='Read the Port Atlas from www.amicradle.com again'>Check for updates</button>"
+"  <button id=updates title='Read every source again'>Check for updates</button>"
 " </row>"
 " <row id=middle>"
 "  <fieldset id=game><legend id=gname>AmiPortAtlas</legend>"
@@ -37,6 +39,7 @@ static const char markup[] =
 "   <row id=shotbar><button id=prev title='The picture before'>&lt;</button>"
 "    <span id=shotcap></span><button id=next title='The next picture'>&gt;</button></row>"
 "   <column id=facts>"
+"    <row class=fact id=r_about><span class=k>About</span><span class=v id=f_about></span></row>"
 "    <row class=fact id=r_version><span class=k>Available</span><span class=v id=f_version></span></row>"
 "    <row class=fact id=r_installed><span class=k>Installed</span><span class=v id=f_installed></span></row>"
 "    <row class=fact id=r_year><span class=k>Year</span><span class=v id=f_year></span></row>"
@@ -47,6 +50,8 @@ static const char markup[] =
 "    <row class=fact id=r_size><span class=k>Size</span><span class=v id=f_size></span></row>"
 "    <row class=fact id=r_data><span class=k>Game data</span><span class=v id=f_data></span></row>"
 "    <row class=fact id=r_release><span class=k>Release</span><span class=v id=f_release></span></row>"
+"    <row class=fact id=r_by><span class=k>By</span><span class=v id=f_by></span></row>"
+"    <row class=fact id=r_source><span class=k>Source</span><span class=v id=f_source></span></row>"
 "   </column>"
 "  </fieldset>"
 "  <column id=right>"
@@ -70,6 +75,8 @@ static const char markup[] =
 static const char css[] =
 "#root{flex:1;padding:8px;gap:8px}"
 "#top{gap:6px;align-items:center}"
+"#find{width:60px}#show{width:110px}#from{width:130px}"
+"#top label,#top button{white-space:nowrap}"
 "#middle{flex:1;gap:10px}"
 "#game{width:470px;gap:8px}"
 "#shot{height:300px;background:#000;border:1px solid #9aa6b3}"
@@ -91,7 +98,9 @@ static olui *U;
 static UiHost *H;
 static Feed *F;
 static Port **shown;
-static int nshown, show_mode, fit_mode, sort_key, sort_desc;
+static int nshown, show_mode, fit_mode, from_mode, sort_key, sort_desc;
+static const char *const *from_ids;
+static int nfrom;
 static char find_text[96];
 static Port *sel;
 static int shot, ticks;
@@ -109,6 +118,21 @@ static void set_text(const char *id, const char *text)
 }
 
 static const char *installed(const Port *p) { return H && H->installed ? H->installed(H->data, p) : NULL; }
+
+/* A release address as the facts show it: a release's tag, else the
+ * address without https:// and www. (Release page opens the whole one). */
+static const char *short_url(const char *u)
+{
+    const char *t;
+    if (!u) return NULL;
+    t = strstr(u, "/releases/tag/");
+    if (t && t[14]) return t + 14;
+    if (strncmp(u, "https://", 8) == 0) u += 8;
+    else if (strncmp(u, "http://", 7) == 0) u += 7;
+    if (strncmp(u, "www.", 4) == 0) u += 4;
+    if (strncmp(u, "github.com/", 11) == 0) u += 11;
+    return u;
+}
 
 static int is_update(const Port *p)
 {
@@ -140,8 +164,9 @@ static int state_is(const Port *p, const char *s) { return p->state && strcmp(p-
 
 static int passes(const Port *p)
 {
-    if (find_text[0] && !contains(p->title, find_text)) return 0;
+    if (find_text[0] && !contains(p->title, find_text) && !(p->summary && contains(p->summary, find_text))) return 0;
     if (fit_mode && (!p->fit || strcmp(p->fit, fit_name[fit_mode]) != 0)) return 0;
+    if (from_mode > 0 && from_mode <= nfrom && !(p->source && strcmp(p->source, from_ids[from_mode - 1]) == 0)) return 0;
     switch (show_mode) {
     case 1: return port_installable(p);
     case 2: return port_is_original(p);
@@ -169,7 +194,8 @@ static const char *cell(void *data, int row, int column, int *image)
     case 0:
         *image = installed(p) ? (is_update(p) ? MARK_UPDATE : MARK_INSTALLED)
                : port_installable(p) ? MARK_AVAILABLE : port_is_original(p) ? MARK_ORIGINAL : MARK_COMING;
-        snprintf(b, 24, "%ld", p->number);
+        if (p->number > 0) snprintf(b, 24, "%ld", p->number);
+        else b[0] = 0;     /* another source's entry has no Atlas number */
         return b;
     case 1: return p->title;
     case 2: snprintf(b, 24, "%.4s", p->year ? p->year : ""); return b;
@@ -217,8 +243,11 @@ static void fill(void)
     }
     headings();
     if (F) {
-        snprintf(line, sizeof line, "Port Atlas of %s: %d of %d shown, %d to install",
-                 F->generated ? F->generated : "?", nshown, F->count, available);
+        if (nfrom > 1)
+            snprintf(line, sizeof line, "%d sources: %d of %d shown, %d to install", nfrom, nshown, F->count, available);
+        else
+            snprintf(line, sizeof line, "Port Atlas of %s: %d of %d shown, %d to install",
+                     F->generated ? F->generated : "?", nshown, F->count, available);
         ui_status(line);
     }
 }
@@ -291,12 +320,17 @@ static void select_port(Port *p)
         else line[0] = 0;
         fact("size", line);
         fact("data", p->game_data);
-        fact("release", p->release_url ? p->release_url : p->port_repo);
+        fact("release", short_url(p->release_url ? p->release_url : p->port_repo));
+        fact("about", p->summary);
+        fact("by", p->author);
+        /* the Atlas's own entries look as they did; another source's says which */
+        fact("source", p->source && strcmp(p->source, ATLAS_SOURCE) != 0 && H && H->source_name
+                       ? H->source_name(H->data, p->source) : NULL);
     } else {
         static const char *const ids[] = { "version", "installed", "year", "display", "runs", "tested",
-                                           "needs", "size", "data", "release" };
+                                           "needs", "size", "data", "release", "about", "by", "source" };
         int i;
-        for (i = 0; i < 10; i++) fact(ids[i], NULL);
+        for (i = 0; i < 13; i++) fact(ids[i], NULL);
     }
     set_text("install", p && is_update(p) ? "Update..." : inst ? "Play" : "Install...");
     olui_set_disabled(U, el("install"), !(p && (inst || port_installable(p))));
@@ -340,6 +374,7 @@ static void on_choice(olui *ui, const olui_event *ev, void *d)
     (void)ui; (void)d;
     if (strcmp(ev->id, "show") == 0) show_mode = ev->index;
     else if (strcmp(ev->id, "fit") == 0) fit_mode = ev->index;
+    else if (strcmp(ev->id, "from") == 0) from_mode = ev->index;
     else { sort_key = ev->index; sort_desc = 0; }
     fill();
 }
@@ -395,6 +430,7 @@ int ui_build(olui *ui, UiHost *host, char *err, size_t errlen)
     olui_on(ui, "find", OLUI_CHANGE, on_find, NULL);
     olui_on(ui, "show", OLUI_CHANGE, on_choice, NULL);
     olui_on(ui, "fit", OLUI_CHANGE, on_choice, NULL);
+    olui_on(ui, "from", OLUI_CHANGE, on_choice, NULL);
     olui_on(ui, "sort", OLUI_CHANGE, on_choice, NULL);
     for (c = 0; c < NCOLS; c++) {
         static char ids[NCOLS][4];
@@ -413,6 +449,20 @@ int ui_build(olui *ui, UiHost *host, char *err, size_t errlen)
     olui_on(ui, "remove", OLUI_CLICK, on_button, NULL);
     select_port(NULL);
     return 1;
+}
+
+void ui_set_sources(const char *const *ids, const char *const *names, int n)
+{
+    olui_el *from = el("from");
+    int i;
+    from_ids = ids;
+    nfrom = n;
+    if (from_mode > n) from_mode = 0;
+    if (!from) return;
+    olui_select_clear(U, from);
+    olui_select_add(U, from, "All sources", NULL);
+    for (i = 0; i < n; i++) olui_select_add(U, from, names[i], ids[i]);
+    olui_select_set(U, from, from_mode);
 }
 
 void ui_set_feed(Feed *feed)
@@ -434,10 +484,11 @@ void ui_progress(int percent)
 
 void ui_busy(int busy)
 {
-    static const char *const ids[] = { "install", "release", "remove", "updates", "scan", "list", "find" };
+    static const char *const ids[] = { "install", "release", "remove", "updates", "scan", "list", "find", "from" };
     int i;
     if (!busy) { select_port(sel); olui_set_disabled(U, el("updates"), 0); olui_set_disabled(U, el("scan"), 0);
-                 olui_set_disabled(U, el("list"), 0); olui_set_disabled(U, el("find"), 0); return; }
+                 olui_set_disabled(U, el("list"), 0); olui_set_disabled(U, el("find"), 0);
+                 olui_set_disabled(U, el("from"), 0); return; }
     for (i = 0; i < (int)(sizeof ids / sizeof ids[0]); i++) olui_set_disabled(U, el(ids[i]), 1);
 }
 
