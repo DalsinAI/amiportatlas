@@ -22,6 +22,8 @@ your own source over FTP or FTPS, and can send it to Aminet too.
 
 ![AmiPortAtlas showing Neverball, installed and ready to play](docs/images/amiportatlas-window.png)
 
+![AmiPortAtlas 0.2 on a Workbench: Kobo Deluxe's pictures, and the games found on its disks](docs/images/amiportatlas-kobo.png)
+
 ![Atlas in a Shell: the sources, an update, a search](docs/images/atlas-shell.png)
 
 [docs/HOWTO.md](docs/HOWTO.md) shows how to install it and use it.
