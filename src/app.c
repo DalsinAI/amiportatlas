@@ -32,7 +32,7 @@
 
 #define CACHE      "PROGDIR:Cache"
 
-static const char vers[] = "$VER: AmiPortAtlas 0.2 (05.11.2026) The AmiCradle Team";
+static const char vers[] = "$VER: AmiPortAtlas 0.2 (06.11.2026) The AmiCradle Team";
 
 static struct {
     struct Window *win;
