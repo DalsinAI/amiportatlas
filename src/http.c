@@ -32,7 +32,7 @@
 #include "net.h"
 #include "sha256.h"
 
-#define AP_AGENT "AmiPortAtlas/0.1 (" AP_SYSTEM ")"
+#define AP_AGENT "AmiPortAtlas/0.2.1 (" AP_SYSTEM ")"
 
 extern struct Library *SocketBase;
 #ifdef AP_HAVE_GFOPENTLS

@@ -33,7 +33,7 @@
 #define CACHE      "PROGDIR:Cache"
 #define PICTURES   CACHE "/Pictures"   /* kept until the Atlas stops naming them */
 
-static const char vers[] = "$VER: AmiPortAtlas 0.2 (06.11.2026) The AmiCradle Team";
+static const char vers[] = "$VER: AmiPortAtlas 0.2.1 (06.11.2026) The AmiCradle Team";
 
 static struct {
     struct Window *win;
