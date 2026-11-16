@@ -11,6 +11,9 @@
  *   Atlas SOURCES                    the sources, on and off
  *   Atlas SOURCE ON|OFF|DROP id      switch or take away a source
  *   Atlas SOURCE ADD id URL=index [NAME=name]
+ *   Atlas FETCH URL=address TO=file [SHA256=hex]   one download, kept only when it checks
+ *         (for game ports' Installer scripts: the game data a port may fetch)
+ *   Atlas SHA256 file [SHA256=hex]   the file's SHA-256; with SHA256=, WARN when it differs
  *   Atlas PUBLISH archive.lha TO=id [UPLOAD=ftp(s)://user@host/drawer/] [README=..] [TITLE=..]
  *         [DRAWER=..] [PROGRAM=..] [VERSION=..] [KIND=..] [CPU=..] [FPU] [PICTURES=a.png,b.png] [INSTALLER]
  *
@@ -41,9 +44,9 @@ unsigned long __stack = 65536;   /* libnix swaps to this from the Shell's 4 KB *
 #endif
 
 #define TEMPLATE "COMMAND/A,NAMES/M,TO/K,FROM/K,URL/K,NAME/K,UPLOAD/K,README/K,TITLE/K,DRAWER/K," \
-                 "PROGRAM/K,VERSION/K,KIND/K,CPU/K,PICTURES/K,FPU/S,INSTALLER/S,YES/S"
+                 "PROGRAM/K,VERSION/K,KIND/K,CPU/K,PICTURES/K,FPU/S,INSTALLER/S,YES/S,SHA256/K"
 enum { A_COMMAND, A_NAMES, A_TO, A_FROM, A_URL, A_NAME, A_UPLOAD, A_README, A_TITLE, A_DRAWER,
-       A_PROGRAM, A_VERSION, A_KIND, A_CPU, A_PICTURES, A_FPU, A_INSTALLER, A_YES, A_COUNT };
+       A_PROGRAM, A_VERSION, A_KIND, A_CPU, A_PICTURES, A_FPU, A_INSTALLER, A_YES, A_SHA256, A_COUNT };
 
 #define PUBLISH_VAR "AmiPortAtlas/Publish"   /* "id upload-address" lines */
 
@@ -735,6 +738,60 @@ out:
     return rc;
 }
 
+/* ---- FETCH and SHA256, for Installer scripts ---- */
+
+static int hex64(const char *h)
+{
+    int n = 0;
+    if (!h) return 0;
+    for (; *h; h++, n++)
+        if (!((*h >= '0' && *h <= '9') || (*h >= 'a' && *h <= 'f') || (*h >= 'A' && *h <= 'F'))) return 0;
+    return n == 64;
+}
+
+/* Atlas FETCH URL=address TO=file [SHA256=hex]: the file is written as
+ * file.part and renamed when complete; with SHA256 it is kept only when it
+ * matches. RETURN_OK, or RETURN_ERROR with the reason printed. */
+static int cmd_fetch(void)
+{
+    char why[200];
+    if (!arg(A_URL) || !arg(A_TO)) { printf("Atlas FETCH needs URL= and TO=.\n"); return RETURN_ERROR; }
+    if (arg(A_SHA256) && !hex64(arg(A_SHA256))) { printf("Atlas FETCH: SHA256= is 64 hex digits.\n"); return RETURN_ERROR; }
+    printf("  Downloading %s\n", arg(A_URL));
+    if (!http_get_file(arg(A_URL), arg(A_TO), arg(A_SHA256), progress, NULL, why, (int)sizeof why)) {
+        printf("\nAtlas: %s\n", why);
+        return RETURN_ERROR;
+    }
+    printf("\r  Saved %s%s\n", arg(A_TO), arg(A_SHA256) ? ", its SHA-256 checked" : "");
+    return RETURN_OK;
+}
+
+/* Atlas SHA256 file [SHA256=hex]: prints the file's SHA-256; with SHA256=,
+ * RETURN_WARN when it differs (so an Installer script can test it). */
+static int cmd_sha256(void)
+{
+    static unsigned char buf[16384];
+    unsigned char d[32];
+    Sha256 s;
+    FILE *f;
+    size_t n;
+    int i;
+    if (nnames() != 1) { printf("Atlas SHA256 needs one file.\n"); return RETURN_ERROR; }
+    if (arg(A_SHA256) && !hex64(arg(A_SHA256))) { printf("Atlas SHA256: SHA256= is 64 hex digits.\n"); return RETURN_ERROR; }
+    if (!(f = fopen(names()[0], "rb"))) { printf("Atlas: can't read %s.\n", names()[0]); return RETURN_ERROR; }
+    sha256_init(&s);
+    while ((n = fread(buf, 1, sizeof buf, f)) > 0) {
+        if (stopped()) { fclose(f); printf("Atlas: stopped.\n"); return RETURN_ERROR; }
+        sha256_update(&s, buf, (unsigned long)n);
+    }
+    fclose(f);
+    sha256_final(&s, d);
+    for (i = 0; i < 32; i++) printf("%02x", d[i]);
+    printf("  %s\n", names()[0]);
+    if (arg(A_SHA256) && !sha256_matches(d, arg(A_SHA256))) return RETURN_WARN;
+    return RETURN_OK;
+}
+
 /* ---- the program ---- */
 
 int main(void)
@@ -746,7 +803,7 @@ int main(void)
     rd = ReadArgs((STRPTR)TEMPLATE, args, NULL);
     if (!rd) {
         PrintFault(IoErr(), (STRPTR)"Atlas");
-        printf("Atlas UPDATE | LIST | SEARCH | SHOW | INSTALL | UPGRADE | REMOVE | SOURCES | SOURCE | PUBLISH\n");
+        printf("Atlas UPDATE | LIST | SEARCH | SHOW | INSTALL | UPGRADE | REMOVE | SOURCES | SOURCE | PUBLISH | FETCH | SHA256\n");
         platform_close();
         return RETURN_ERROR;
     }
@@ -761,9 +818,11 @@ int main(void)
     else if (is(c, "SOURCES")) rc = cmd_sources();
     else if (is(c, "SOURCE")) rc = cmd_source();
     else if (is(c, "PUBLISH")) rc = cmd_publish();
+    else if (is(c, "FETCH")) rc = cmd_fetch();
+    else if (is(c, "SHA256")) rc = cmd_sha256();
     else {
         printf("Atlas: %s isn't a command. Atlas UPDATE | LIST | SEARCH | SHOW | INSTALL | UPGRADE | REMOVE |\n"
-               "SOURCES | SOURCE | PUBLISH; docs/SOURCES.md has them all.\n", c);
+               "SOURCES | SOURCE | PUBLISH | FETCH | SHA256; docs/SOURCES.md has them all.\n", c);
         rc = RETURN_ERROR;
     }
     FreeArgs(rd);
