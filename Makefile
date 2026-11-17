@@ -1,7 +1,8 @@
 # AmiPortAtlas. MIT, (c) 2026 The AmiCradle Team.
 #
-#   make test        host tests: the feed reader, SHA-256, and the real window
-#                    laid out by GFOpenLayout UI (needs OLUI and OGT, below)
+#   make test        host tests: the feed reader, SHA-256, the games index, and the real
+#                    window laid out by GFOpenLayout UI (needs OLUI and OGT, below)
+#   make test-games  the games index's tests alone (needs the host's SQLite: libsqlite3-dev)
 #   make render      the window drawn as build/window.png (Python 3 + Pillow)
 #   make os3         AmigaOS 3.2.3 and GFOS: 68040, soft float, as every GFOpen program:
 #                    AmiPortAtlas (the window) and Atlas (the Shell command)
@@ -35,10 +36,10 @@ OLUI_HOST = $(OLUI)/src/openlayout.c $(OLUI)/src/gfcss_parse.c $(OLUI)/src/gfcss
             $(OLUI)/src/gfcss_select.c $(OLUI)/src/openlayout_css.c $(OLUI)/ui/olui.c $(OLUI)/ui/olui_css.c \
             $(OLUI)/ui/olui_markup.c $(OLUI)/ui/olui_theme.c $(OGT)/lib/ogt_theme.c
 
-.PHONY: all test render os3 clean
+.PHONY: all test test-games render os3 clean
 all: test
 
-test: $(OUT)/test_host $(OUT)/ui_host
+test: $(OUT)/test_host $(OUT)/ui_host test-games
 	$(OUT)/test_host $(FEED)
 	$(OUT)/ui_host $(FEED) $(THEME) $(OUT)/window-ops.txt
 
@@ -48,6 +49,14 @@ render: test
 $(OUT)/test_host: tests/test_host.c $(COMMON) src/*.h
 	@mkdir -p $(OUT)
 	$(HOSTCC) -std=c99 $(CWARN) -O1 -g -o $@ tests/test_host.c $(COMMON)
+
+# The games index (src/gamesdb.c) is not yet in the Amiga programs: it joins them with DalsinAI/gfopensqlite.
+test-games: $(OUT)/test_gamesdb
+	$(OUT)/test_gamesdb $(FEED)
+
+$(OUT)/test_gamesdb: tests/test_gamesdb.c src/gamesdb.c $(COMMON) src/*.h
+	@mkdir -p $(OUT)
+	$(HOSTCC) -std=c99 $(CWARN) -O1 -g -o $@ tests/test_gamesdb.c src/gamesdb.c $(COMMON) -lsqlite3
 
 $(OUT)/ui_host: tests/ui_host.c src/ui.c src/ui.h $(COMMON)
 	@mkdir -p $(OUT)

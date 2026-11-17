@@ -41,6 +41,7 @@ anything without a release greyed; the buttons bottom right, read last.
 | `src/repo.c` | every source read or its saved copy, for the window and Atlas |
 | `src/ftp.c`, `src/net.h` | FTP and FTPS (AUTH TLS) for PUBLISH, on http.c's connections |
 | `src/atlas.c` | Atlas, the Shell command |
+| `src/gamesdb.c` | the games index, an SQLite database of every game listed and every game on the Games drive ([GAMES.md](GAMES.md)); plain C and SQLite, host-tested |
 | `src/sha256.c` | SHA-256; plain C, host-tested |
 | `src/http.c` | HTTP/1.1 GET over bsdsocket.library and GFOpenTLS; redirects, chunked |
 | `src/install.c` | checks, install, launch, remove, the installed list |
