@@ -63,6 +63,11 @@ int games_folder_of(const Port *p)
     return games_folder_of_source(p->source ? p->source : ATLAS_SOURCE);
 }
 
+int games_shelf_drawer(const char *name)
+{
+    return name && ((name[0] && !name[1]) || strcmp(name, "0-9") == 0);
+}
+
 /* The tables. A change here is a new GAMESDB_SCHEMA. */
 static const char schema_sql[] =
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT) WITHOUT ROWID;"

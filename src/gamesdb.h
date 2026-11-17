@@ -39,6 +39,11 @@ int games_folder_of_source(const char *source_id);
  * drawer; else its source's. */
 int games_folder_of(const Port *p);
 
+/* A drawer that only sorts the games under it, as big sets have ("A", "B",
+ * "0-9", "#"): a name of one character, or "0-9". Its drawers are the
+ * games; it is not one itself. */
+int games_shelf_drawer(const char *name);
+
 typedef struct GamesDb GamesDb;
 
 /* Opens the index, making the file and its tables when they are not there.

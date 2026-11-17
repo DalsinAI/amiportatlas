@@ -37,6 +37,9 @@
 #include "ftp.h"
 #include "index.h"
 #include "sha256.h"
+#ifdef AP_HAVE_SQLITE
+#include "gamesdb.h"
+#endif
 
 const char atlas_version[] __attribute__((used)) = "$VER: Atlas 0.2.1 (06.11.2026) The AmiCradle Team";
 #if !defined(__amigaos4__) && !defined(__AROS__)
@@ -792,6 +795,93 @@ static int cmd_sha256(void)
     return RETURN_OK;
 }
 
+/* ---- the games index ---- */
+
+#ifdef AP_HAVE_SQLITE
+/* The drawers in dir put into the index as games of folder; a drawer that
+ * only sorts games ("A", "0-9") is looked into, once. Answers how many
+ * were put in, -1 when the index refused one. */
+static int index_drawers(GamesDb *db, int folder, const char *dir, int shelves)
+{
+    struct FileInfoBlock *fib;
+    char path[400];
+    int n = 0;
+    BPTR l = Lock((STRPTR)dir, ACCESS_READ);
+    if (!l) return 0;
+    fib = AllocDosObject(DOS_FIB, NULL);
+    if (fib && Examine(l, fib)) {
+        while (n >= 0 && ExNext(l, fib) && !stopped()) {
+            const char *name = (const char *)fib->fib_FileName;
+            size_t d = strlen(dir);
+            if (fib->fib_DirEntryType <= 0) continue;                  /* a file */
+            snprintf(path, sizeof path, "%s%s%s", dir, d && dir[d - 1] != ':' && dir[d - 1] != '/' ? "/" : "", name);
+            if (shelves && games_shelf_drawer(name)) {
+                int in = index_drawers(db, folder, path, 0);
+                n = in < 0 ? -1 : n + in;
+            } else if (gamesdb_put_found(db, folder, name, path, NULL) < 0) n = -1;
+            else n++;
+        }
+    }
+    if (fib) FreeDosObject(DOS_FIB, fib);
+    UnLock(l);
+    return n;
+}
+
+/* Atlas INDEX [TO=file] [FROM=drive]: the games index made from the saved
+ * copies of the sources (Atlas UPDATE reads them anew), what AmiPortAtlas
+ * installed, and the drawers in the Games drive's five drawers. */
+static int cmd_index(void)
+{
+    const char *drive = arg(A_FROM) ? arg(A_FROM) : GAMESDB_DRIVE;
+    const char *file = arg(A_TO) ? arg(A_TO) : GAMESDB_FILE;
+    char why[240], dir[300];
+    struct Process *me = (struct Process *)FindTask(NULL);
+    APTR win = me->pr_WindowPtr;
+    GamesDb *db;
+    BPTR l;
+    size_t d = strlen(drive);
+    int i, listed, rc = RETURN_ERROR;
+
+    me->pr_WindowPtr = (APTR)-1;                    /* no "insert volume Games:" requester */
+    l = Lock((STRPTR)drive, ACCESS_READ);
+    me->pr_WindowPtr = win;
+    if (!l) { printf("Atlas: there is no %s here. FROM= names the Games drive, TO= the index.\n", drive); return RETURN_WARN; }
+    UnLock(l);
+    if (!load(0)) return RETURN_ERROR;
+    db = gamesdb_open(file, why, (int)sizeof why);
+    if (!db) { printf("Atlas: %s\n", why); return RETURN_ERROR; }
+    if (!gamesdb_put_sources(db, S) || (listed = gamesdb_put_feed(db, F)) < 0 || !gamesdb_clear_found(db)) goto bad;
+    for (i = 0; i < F->count; i++) {
+        const Port *p = &F->ports[i];
+        if (p->id && installed_version(p) && !installed_found(p))
+            gamesdb_set_installed(db, p->id, installed_version(p), installed_path(p));
+    }
+    printf("%d entries from the sources.\n", listed);
+    for (i = 0; i < GF_COUNT; i++) {
+        int here;
+        snprintf(dir, sizeof dir, "%s%s%s", drive, d && drive[d - 1] != ':' && drive[d - 1] != '/' ? "/" : "",
+                 games_folder_name(i));
+        here = index_drawers(db, i, dir, 1);
+        if (here < 0) goto bad;
+        printf("  %-10s %5ld listed, %5d on this drive\n", games_folder_name(i), gamesdb_count(db, i, 0), here);
+    }
+    if (stopped()) { printf("Atlas: stopped; the index is not whole.\n"); rc = RETURN_WARN; }
+    else { printf("The games index is %s.\n", file); rc = RETURN_OK; }
+    gamesdb_close(db);
+    return rc;
+bad:
+    printf("Atlas: the games index %s: %s\n", file, gamesdb_error(db));
+    gamesdb_close(db);
+    return RETURN_ERROR;
+}
+#else
+static int cmd_index(void)
+{
+    printf("Atlas: this Atlas was built without the games index.\n");
+    return RETURN_ERROR;
+}
+#endif
+
 /* ---- the program ---- */
 
 int main(void)
@@ -803,7 +893,7 @@ int main(void)
     rd = ReadArgs((STRPTR)TEMPLATE, args, NULL);
     if (!rd) {
         PrintFault(IoErr(), (STRPTR)"Atlas");
-        printf("Atlas UPDATE | LIST | SEARCH | SHOW | INSTALL | UPGRADE | REMOVE | SOURCES | SOURCE | PUBLISH | FETCH | SHA256\n");
+        printf("Atlas UPDATE | LIST | SEARCH | SHOW | INSTALL | UPGRADE | REMOVE | SOURCES | SOURCE | PUBLISH | FETCH | SHA256 | INDEX\n");
         platform_close();
         return RETURN_ERROR;
     }
@@ -820,9 +910,10 @@ int main(void)
     else if (is(c, "PUBLISH")) rc = cmd_publish();
     else if (is(c, "FETCH")) rc = cmd_fetch();
     else if (is(c, "SHA256")) rc = cmd_sha256();
+    else if (is(c, "INDEX")) rc = cmd_index();
     else {
         printf("Atlas: %s isn't a command. Atlas UPDATE | LIST | SEARCH | SHOW | INSTALL | UPGRADE | REMOVE |\n"
-               "SOURCES | SOURCE | PUBLISH | FETCH | SHA256; docs/SOURCES.md has them all.\n", c);
+               "SOURCES | SOURCE | PUBLISH | FETCH | SHA256 | INDEX; docs/SOURCES.md has them all.\n", c);
         rc = RETURN_ERROR;
     }
     FreeArgs(rd);
