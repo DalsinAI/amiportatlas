@@ -80,13 +80,37 @@ those games (by `drawer`) takes the rows over.
 An entry the sources drop goes from the index, unless it is on this
 machine: then it stays, `listed` 0, until it is removed.
 
+## The window's sections
+
+Above the list is a row of tabs: **All**, **New**, then a tab for each
+drawer there is something to show for. The tabs are found, not fixed
+(Dale, 17 November 2026: "the tabs at hte top need to autodiscvoer some
+how"). A drawer gets a tab when
+
+- it is at the top of the Games drive, whatever its name (the launcher's
+  own drawer apart), so a drawer the player makes there shows up; or
+- a source lists a game that belongs in it, so a new source's drawer shows
+  up as soon as its index is read, and with no Games drive at all the
+  window still has the sections the sources fill.
+
+The five standard drawers come first in their order, any other after
+them. The drive is looked at when the program starts and at every Find
+installed. A drawer's tab shows the games that belong in it
+(`src/gamesfolders.c`, the same rule the index uses); New shows what the
+index dates as new or updated. Find, Show, Fit, From and the sorting work
+inside whichever section is shown.
+
+## Who makes the index
+
+AmiPortAtlas makes it again each time it reads the sources (at its start
+and at Check for updates), when there is a Games drive; `Atlas INDEX`
+makes it from the Shell. Both use `src/gamesindex.c`. The New section
+shows what the index dates as new or updated in the last 14 days.
+
 ## Still to do
 
-1. The index built on the Amiga: AmiPortAtlas and Atlas linked with
-   DalsinAI/gfopensqlite (soft float, one task), `Atlas INDEX` to make it
-   from the Shell, and the five drawers looked through.
-2. The window reading the index: the five drawers as its sections, and
-   the New page.
+1. Games found on the drive that no source lists (a WHDLoad set) shown
+   in the window's list: the index has them, the list does not yet.
 3. The launcher as a commodity, in the systray once started.
 4. The full screen mode driven by a joystick.
 5. Sources for WHDLoad, itch.io and Aminet: what each may fetch.

@@ -31,6 +31,10 @@ static int is(const char *sql, const char *want)
     return 0;
 }
 
+static char news[8][40];
+static int nnews;
+static void news_fn(void *user, const char *id) { (void)user; if (nnews < 8) snprintf(news[nnews++], 40, "%s", id); }
+
 static Feed *feed(const char *json)
 {
     const char *why = NULL;
@@ -191,6 +195,11 @@ static void test_index(const char *path)
              " (SELECT * FROM games WHERE listed = 1 AND (first_seen >= '2026-11-18' OR updated >= '2026-11-18') ORDER BY title)",
              "Kobo Deluxe:-:2026-11-18 XBoing:2026-11-18:-"));
     CHECK(gamesdb_new_since(db, "2026-11-18") == 2 && gamesdb_new_since(db, "2026-11-19") == 0);
+    nnews = 0;
+    CHECK(gamesdb_each_new(db, "2026-11-18", news_fn, NULL) == 2 && nnews == 2);
+    CHECK(strcmp(news[0], "kobo") == 0 && strcmp(news[1], "xboing") == 0);      /* by id, for a binary search */
+    nnews = 0;
+    CHECK(gamesdb_each_new(db, "2026-11-19", news_fn, NULL) == 0 && nnews == 0);
     gamesdb_set_today(db, "2026-11-20");
     CHECK(gamesdb_put_feed(db, f) == 2);                     /* read again with nothing changed: no news */
     CHECK(gamesdb_new_since(db, "2026-11-19") == 0 && gamesdb_new_since(db, "2026-11-18") == 2);

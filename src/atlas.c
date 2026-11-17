@@ -39,7 +39,7 @@
 #include "index.h"
 #include "sha256.h"
 #ifdef AP_HAVE_SQLITE
-#include "gamesdb.h"
+#include "gamesindex.h"
 #endif
 
 const char atlas_version[] __attribute__((used)) = "$VER: Atlas 0.2.1 (06.11.2026) The AmiCradle Team";
@@ -799,35 +799,6 @@ static int cmd_sha256(void)
 /* ---- the games index ---- */
 
 #ifdef AP_HAVE_SQLITE
-/* The drawers in dir put into the index as games of folder; a drawer that
- * only sorts games ("A", "0-9") is looked into, once. Answers how many
- * were put in, -1 when the index refused one. */
-static int index_drawers(GamesDb *db, int folder, const char *dir, int shelves)
-{
-    struct FileInfoBlock *fib;
-    char path[400];
-    int n = 0;
-    BPTR l = Lock((STRPTR)dir, ACCESS_READ);
-    if (!l) return 0;
-    fib = AllocDosObject(DOS_FIB, NULL);
-    if (fib && Examine(l, fib)) {
-        while (n >= 0 && ExNext(l, fib) && !stopped()) {
-            const char *name = (const char *)fib->fib_FileName;
-            size_t d = strlen(dir);
-            if (fib->fib_DirEntryType <= 0) continue;                  /* a file */
-            snprintf(path, sizeof path, "%s%s%s", dir, d && dir[d - 1] != ':' && dir[d - 1] != '/' ? "/" : "", name);
-            if (shelves && games_shelf_drawer(name)) {
-                int in = index_drawers(db, folder, path, 0);
-                n = in < 0 ? -1 : n + in;
-            } else if (gamesdb_put_found(db, folder, name, path, NULL) < 0) n = -1;
-            else n++;
-        }
-    }
-    if (fib) FreeDosObject(DOS_FIB, fib);
-    UnLock(l);
-    return n;
-}
-
 /* Atlas INDEX [TO=file] [FROM=drive]: the games index made from the saved
  * copies of the sources (Atlas UPDATE reads them anew), what AmiPortAtlas
  * installed, and the drawers in the Games drive's five drawers. */
@@ -835,54 +806,24 @@ static int cmd_index(void)
 {
     const char *drive = arg(A_FROM) ? arg(A_FROM) : GAMESDB_DRIVE;
     const char *file = arg(A_TO) ? arg(A_TO) : GAMESDB_FILE;
-    char why[240], dir[300], since[12];
-    struct Process *me = (struct Process *)FindTask(NULL);
-    APTR win = me->pr_WindowPtr;
-    GamesDb *db;
-    BPTR l;
-    size_t d = strlen(drive);
-    int i, listed, rc = RETURN_ERROR;
-
-    me->pr_WindowPtr = (APTR)-1;                    /* no "insert volume Games:" requester */
-    l = Lock((STRPTR)drive, ACCESS_READ);
-    me->pr_WindowPtr = win;
-    if (!l) { printf("Atlas: there is no %s here. FROM= names the Games drive, TO= the index.\n", drive); return RETURN_WARN; }
-    UnLock(l);
+    GamesIndexReport r;
+    char why[240];
+    int i, rc;
+    if (!games_index_drive(drive)) {
+        printf("Atlas: there is no %s here. FROM= names the Games drive, TO= the index.\n", drive);
+        return RETURN_WARN;
+    }
     if (!load(0)) return RETURN_ERROR;
-    db = gamesdb_open(file, why, (int)sizeof why);
-    if (!db) { printf("Atlas: %s\n", why); return RETURN_ERROR; }
-    {
-        char today[12];
-        time_t now = time(NULL);
-        struct tm *tm = localtime(&now);
-        if (tm && strftime(today, sizeof today, "%Y-%m-%d", tm)) gamesdb_set_today(db, today);
-        snprintf(since, sizeof since, "%s", tm ? today : "");
-    }
-    if (!gamesdb_put_sources(db, S) || (listed = gamesdb_put_feed(db, F)) < 0 || !gamesdb_clear_found(db)) goto bad;
-    for (i = 0; i < F->count; i++) {
-        const Port *p = &F->ports[i];
-        if (p->id && installed_version(p) && !installed_found(p))
-            gamesdb_set_installed(db, p->id, installed_version(p), installed_path(p));
-    }
-    printf("%d entries from the sources", listed);
-    if (since[0] && gamesdb_new_since(db, since) > 0) printf(", %ld new or updated today", gamesdb_new_since(db, since));
+    rc = games_index_make(drive, file, F, S, stopped, &r, why, (int)sizeof why);
+    if (!rc) { printf("Atlas: %s\n", why); return RETURN_ERROR; }
+    printf("%d entries from the sources", r.listed);
+    if (r.news_today > 0) printf(", %ld new or updated today", r.news_today);
     printf(".\n");
-    for (i = 0; i < GF_COUNT; i++) {
-        int here;
-        snprintf(dir, sizeof dir, "%s%s%s", drive, d && drive[d - 1] != ':' && drive[d - 1] != '/' ? "/" : "",
-                 games_folder_name(i));
-        here = index_drawers(db, i, dir, 1);
-        if (here < 0) goto bad;
-        printf("  %-10s %5ld listed, %5d on this drive\n", games_folder_name(i), gamesdb_count(db, i, 0), here);
-    }
-    if (stopped()) { printf("Atlas: stopped; the index is not whole.\n"); rc = RETURN_WARN; }
-    else { printf("The games index is %s.\n", file); rc = RETURN_OK; }
-    gamesdb_close(db);
-    return rc;
-bad:
-    printf("Atlas: the games index %s: %s\n", file, gamesdb_error(db));
-    gamesdb_close(db);
-    return RETURN_ERROR;
+    for (i = 0; i < GF_COUNT; i++)
+        printf("  %-10s %5ld listed, %5d on this drive\n", games_folder_name(i), r.listed_in[i], r.on_drive[i]);
+    if (r.stopped) { printf("Atlas: stopped; the index is not whole.\n"); return RETURN_WARN; }
+    printf("The games index is %s.\n", file);
+    return RETURN_OK;
 }
 #else
 static int cmd_index(void)

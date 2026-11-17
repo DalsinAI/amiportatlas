@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "ui.h"
+#include "gamesfolders.h"
 #include "match.h"
 
 #define CYCLE_TICKS 50   /* ui_tick comes every 100 ms: a picture every 5 s */
@@ -55,6 +56,7 @@ static const char markup[] =
 "   </column>"
 "  </fieldset>"
 "  <column id=right>"
+"   <row id=secbox></row>"
 "   <row id=heads>"
 "    <button class=th id=h0 style='width:44px'>#</button><button class=th id=h1 style='width:176px'>Name</button>"
 "    <button class=th id=h2 style='width:44px'>Year</button><button class=th id=h3 style='width:84px'>State</button>"
@@ -86,6 +88,7 @@ static const char css[] =
 ".fact .k{width:110px;font-weight:bold}"
 ".fact .v{flex:1}"
 "#right{flex:1;gap:6px}"
+"#secbox{height:30px}#sections{flex:1}"
 "#heads{gap:0}"
 ".th{border-radius:0;text-align:left;padding:2px 6px}"
 "#list{flex:1}"
@@ -99,6 +102,21 @@ static UiHost *H;
 static Feed *F;
 static Port **shown;
 static int nshown, show_mode, fit_mode, from_mode, sort_key, sort_desc;
+/* The sections above the list: everything, what is new, then a tab for
+ * each drawer that is there to show. They are found, not fixed (Dale, 17
+ * Nov 2026: "the tabs at hte top need to autodiscvoer some how"): a drawer
+ * gets a tab when it is at the top of the Games drive (the host says which
+ * are, ui_set_drawers) or when a source lists a game that belongs in it.
+ * The five standard drawers come first in their order, others after, by
+ * name. */
+enum { SEC_ALL, SEC_NEW, SEC_FOLDER };
+#define SEC_MAX 24
+#define SEC_NAME 32
+static int section;
+static char sec_name[SEC_MAX][SEC_NAME];
+static int nsec;
+static char drawer_name[SEC_MAX][SEC_NAME];
+static int ndrawers;
 static const char *const *from_ids;
 static int nfrom;
 static char find_text[96];
@@ -160,10 +178,26 @@ static int contains(const char *hay, const char *needle)
     return n == 0;
 }
 
+static int same_name(const char *a, const char *b)
+{
+    for (; *a && *b; a++, b++) {
+        char x = *a, y = *b;
+        if (x >= 'A' && x <= 'Z') x += 32;
+        if (y >= 'A' && y <= 'Z') y += 32;
+        if (x != y) return 0;
+    }
+    return *a == *b;
+}
+
 static int state_is(const Port *p, const char *s) { return p->state && strcmp(p->state, s) == 0; }
 
 static int passes(const Port *p)
 {
+    if (section == SEC_NEW && !(H->is_new && H->is_new(H->data, p))) return 0;
+    if (section >= SEC_FOLDER) {
+        const char *in = section - SEC_FOLDER < nsec ? games_folder_name(games_folder_of(p)) : NULL;
+        if (!in || !same_name(in, sec_name[section - SEC_FOLDER])) return 0;
+    }
     if (find_text[0] && !contains(p->title, find_text) && !(p->summary && contains(p->summary, find_text))) return 0;
     if (fit_mode && (!p->fit || strcmp(p->fit, fit_name[fit_mode]) != 0)) return 0;
     if (from_mode > 0 && from_mode <= nfrom && !(p->source && strcmp(p->source, from_ids[from_mode - 1]) == 0)) return 0;
@@ -253,6 +287,33 @@ static void fill(void)
 }
 
 void ui_refill(void) { fill(); ui_select_row(-2); }
+
+void ui_set_section(int n)
+{
+    if (n < 0 || n >= SEC_FOLDER + nsec) return;
+    section = n;
+    olui_tabs_select(U, el("sections"), n);
+    fill();
+    ui_select_row(nshown ? 0 : -1);
+}
+
+int ui_section(void) { return section; }
+
+int ui_sections(void) { return SEC_FOLDER + nsec; }
+
+const char *ui_section_name(int n)
+{
+    if (n == SEC_ALL) return "All";
+    if (n == SEC_NEW) return "New";
+    return n >= SEC_FOLDER && n - SEC_FOLDER < nsec ? sec_name[n - SEC_FOLDER] : NULL;
+}
+
+int ui_find_section(const char *name)
+{
+    int i;
+    for (i = 0; i < ui_sections(); i++) if (same_name(ui_section_name(i), name)) return i;
+    return -1;
+}
 
 /* ---- the selected game ---- */
 
@@ -379,6 +440,74 @@ static void on_choice(olui *ui, const olui_event *ev, void *d)
     fill();
 }
 
+static void on_section(olui *ui, const olui_event *ev, void *d)
+{
+    (void)d;
+    section = olui_tabs_current(olui_find(ui, ev->id));
+    fill();
+}
+
+static void sec_add(char list[][SEC_NAME], int *n, const char *name)
+{
+    int i;
+    if (!name || !*name || *n >= SEC_MAX) return;
+    for (i = 0; i < *n; i++) if (same_name(list[i], name)) return;
+    snprintf(list[(*n)++], SEC_NAME, "%s", name);
+}
+
+/* A title safe inside the markup's quotes. */
+static void sec_title(const char *name, char *out, int max)
+{
+    int n = 0;
+    for (; *name && n + 1 < max; name++)
+        if (*name != '\'' && *name != '<' && *name != '>' && *name != '&') out[n++] = *name;
+    out[n] = 0;
+}
+
+/* The tabs made again from what is there now, when they changed; the
+ * section shown stays the one shown when it is still there, else All. */
+static void sections(void)
+{
+    char want[SEC_MAX][SEC_NAME], shown_name[SEC_NAME], markup_buf[SEC_MAX * 64 + 256], title[SEC_NAME], err[80];
+    int has[GF_COUNT], n = 0, i, j, same, at;
+    olui_el *box = el("secbox"), *old = el("sections");
+    if (!box) return;
+    memset(has, 0, sizeof has);
+    for (i = 0; F && i < F->count; i++) {
+        int f = games_folder_of(&F->ports[i]);
+        if (f != GF_NONE) has[f] = 1;
+    }
+    for (i = 0; i < GF_COUNT; i++) {                        /* the standard five, in their order */
+        int there = has[i];
+        for (j = 0; !there && j < ndrawers; j++) there = same_name(drawer_name[j], games_folder_name(i));
+        if (there) sec_add(want, &n, games_folder_name(i));
+    }
+    for (j = 0; j < ndrawers; j++) sec_add(want, &n, drawer_name[j]);   /* then any other drawer on the drive */
+    same = old != NULL && n == nsec;
+    for (i = 0; same && i < n; i++) same = strcmp(want[i], sec_name[i]) == 0;
+    if (same) return;
+    shown_name[0] = 0;
+    if (section >= SEC_FOLDER && section - SEC_FOLDER < nsec) snprintf(shown_name, sizeof shown_name, "%s", sec_name[section - SEC_FOLDER]);
+    at = snprintf(markup_buf, sizeof markup_buf,
+                  "<tabs id=sections title='Everything, what is new, or one drawer of the Games drive'>"
+                  "<tab title=All></tab><tab title=New></tab>");
+    for (i = 0; i < n; i++) {
+        sec_title(want[i], title, (int)sizeof title);
+        at += snprintf(markup_buf + at, sizeof markup_buf - (size_t)at, "<tab title='%s'></tab>", title);
+    }
+    snprintf(markup_buf + at, sizeof markup_buf - (size_t)at, "</tabs>");
+    if (old) olui_remove(U, old);
+    if (!olui_add(U, box, markup_buf, err, sizeof err)) return;
+    olui_on(U, "sections", OLUI_SELECT, on_section, NULL);
+    memcpy(sec_name, want, sizeof sec_name);
+    nsec = n;
+    if (section >= SEC_FOLDER) {
+        section = SEC_ALL;
+        for (i = 0; i < nsec; i++) if (same_name(sec_name[i], shown_name)) section = SEC_FOLDER + i;
+    }
+    olui_tabs_select(U, el("sections"), section);
+}
+
 static void on_heading(olui *ui, const olui_event *ev, void *d)
 {
     int c = ev->id[1] - '0';
@@ -447,6 +576,9 @@ int ui_build(olui *ui, UiHost *host, char *err, size_t errlen)
     olui_on(ui, "install", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "release", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "remove", OLUI_CLICK, on_button, NULL);
+    nsec = ndrawers = 0;
+    section = SEC_ALL;
+    sections();
     select_port(NULL);
     return 1;
 }
@@ -465,10 +597,21 @@ void ui_set_sources(const char *const *ids, const char *const *names, int n)
     olui_select_set(U, from, from_mode);
 }
 
+void ui_set_drawers(const char *const *names, int n)
+{
+    int i;
+    ndrawers = 0;
+    for (i = 0; i < n; i++) sec_add(drawer_name, &ndrawers, names[i]);
+    sections();
+    fill();
+    ui_select_row(-2);
+}
+
 void ui_set_feed(Feed *feed)
 {
     F = feed;
     sel = NULL;
+    sections();
     fill();
     ui_select_row(nshown ? 0 : -1);
 }

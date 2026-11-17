@@ -29,6 +29,9 @@
 #include "install.h"
 #include "repo.h"
 #include "ui.h"
+#ifdef AP_HAVE_SQLITE
+#include "gamesindex.h"
+#endif
 
 #define CACHE      "PROGDIR:Cache"
 #define PICTURES   CACHE "/Pictures"   /* kept until the Atlas stops naming them */
@@ -322,6 +325,70 @@ static int list_files(const char *dir, char (**names)[40], int *n)
     return 1;
 }
 
+/* The games index kept up as the sources are read, and what it dates as
+ * new for the New section: entries new or updated in the last NEWS_DAYS. */
+#define NEWS_DAYS 14
+#ifdef AP_HAVE_SQLITE
+static char **news_ids;
+static int nnews;
+
+static void index_refresh(void)
+{
+    GamesIndexReport r;
+    char why[200];
+    if (!A.feed || !A.sources || !games_index_drive(GAMESDB_DRIVE)) return;
+    games_index_make(GAMESDB_DRIVE, GAMESDB_FILE, A.feed, A.sources, NULL, &r, why, (int)sizeof why);
+    games_index_news_free(news_ids, nnews);
+    news_ids = NULL;
+    nnews = games_index_news(GAMESDB_FILE, NEWS_DAYS, &news_ids);
+    if (nnews < 0) nnews = 0;
+}
+
+static int host_is_new(void *data, const Port *p) { (void)data; return games_index_is_news(news_ids, nnews, p->id); }
+#else
+static void index_refresh(void) {}
+static int host_is_new(void *data, const Port *p) { (void)data; (void)p; return 0; }
+#endif
+
+/* The drawers at the top of the Games drive, for the window's sections: they
+ * are found each time, so a drawer the player makes there gets a tab. The
+ * launcher's own drawer is not one of them. No Games drive: none, and no
+ * "insert volume" requester. */
+#define GAMES_DRIVE "Games:"
+static int own_drawer(const char *name)
+{
+    const char *own = "amiportatlas";
+    for (; *name && *own; name++, own++) if ((*name | 32) != *own) return 0;
+    return *name == *own;
+}
+
+static void find_drawers(void)
+{
+    static char found[24][32];
+    const char *names[24];
+    struct FileInfoBlock *fib = (struct FileInfoBlock *)AllocDosObject(DOS_FIB, NULL);
+    struct Process *me = (struct Process *)FindTask(NULL);
+    APTR win = me->pr_WindowPtr;
+    int n = 0;
+    BPTR l;
+    me->pr_WindowPtr = (APTR)-1;
+    l = Lock((STRPTR)GAMES_DRIVE, ACCESS_READ);
+    me->pr_WindowPtr = win;
+    if (l) {
+        if (fib && Examine(l, fib))
+            while (n < 24 && ExNext(l, fib)) {
+                const char *name = (const char *)fib->fib_FileName;
+                if (fib->fib_DirEntryType <= 0 || strlen(name) >= 32 || own_drawer(name)) continue;
+                snprintf(found[n], sizeof found[n], "%s", name);
+                names[n] = found[n];
+                n++;
+            }
+        UnLock(l);
+    }
+    if (fib) FreeDosObject(DOS_FIB, fib);
+    ui_set_drawers(names, n);
+}
+
 static void drop_old_pictures(void)
 {
     char (*names)[40], path[160];
@@ -382,6 +449,7 @@ static void read_sources(int fetch)
         A.feed = f;
         set_sources(s);
         if (fetch && all_fresh()) prune_pictures(f);
+        index_refresh();        /* before the list is filled: New asks it */
         ui_set_feed(f);
         feed_free(old);
         repo_summary(A.sources, line, (int)sizeof line);
@@ -533,6 +601,7 @@ static void host_scan(void *data)
     free(list);
     SetVar((STRPTR)"AmiPortAtlas/Scanned", (STRPTR)"1", 1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
     busy(0);
+    find_drawers();
     ui_refill();
     if (found < 0) { status("There wasn't the memory to look for installed games."); return; }
     bare = install_missing_icons(0);
@@ -612,6 +681,7 @@ int main(void)
     host.refresh = host_refresh;
     host.scan = host_scan;
     host.source_name = host_source_name;
+    host.is_new = host_is_new;
     if (!ui_build(A.ui, &host, err, sizeof err)) { printf("AmiPortAtlas: %s\n", err); goto out; }
     get_pens();
     olui_amiga_own(A.glue, olui_find(A.ui, "shot"), draw_shot, NULL);
@@ -620,6 +690,7 @@ int main(void)
 
     share_cache();
     installed_load();
+    find_drawers();
     read_sources(0);            /* the saved copies show at once */
     if (!all_fresh()) read_sources(1);
     {

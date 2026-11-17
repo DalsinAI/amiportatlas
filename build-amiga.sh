@@ -56,7 +56,7 @@ if [ -z "${SQLITE:-}" ]; then
 fi
 SQL=""; SQLSRC=""; SQLLIB=""
 if [ "$SQLITE" != no ]; then
-    SQL="-DAP_HAVE_SQLITE -I$SQLITE/include"; SQLSRC="$HERE/src/gamesdb.c"; SQLLIB="$SQLITE/lib/libsqlite3.a"
+    SQL="-DAP_HAVE_SQLITE -I$SQLITE/include"; SQLSRC="$HERE/src/gamesdb.c $HERE/src/gamesindex.c"; SQLLIB="$SQLITE/lib/libsqlite3.a"
     echo "games index: $SQLLIB"
 fi
 
@@ -68,8 +68,8 @@ STOVE=$STOVE OGT_ROOT=$OGT SPECS=$SPECS OUT=$OUT/olui sh "$OLUI/build-ui-amiga.s
 FLAGS="-m68040 -specs=$SPECS -noixemul -O2 -fno-delete-null-pointer-checks $LATE -fno-common -std=gnu99 \
   -Wall -Wextra -Wno-unused-parameter -Wno-pointer-sign -DAP_HAVE_GFOPENTLS -I$OLUI/include -I$TLS/include"
 S=$HERE/src
-COMMON="$S/json.c $S/feed.c $S/sources.c $S/index.c $S/sha256.c $S/match.c $S/http.c $S/install.c $S/platform.c $S/repo.c"
-"$CC" $FLAGS -o "$OUT/AmiPortAtlas" $COMMON "$S/ui.c" "$S/app.c" "$OUT/olui/libolui.a" -lamiga
+COMMON="$S/json.c $S/feed.c $S/sources.c $S/index.c $S/sha256.c $S/match.c $S/gamesfolders.c $S/http.c $S/install.c $S/platform.c $S/repo.c"
+"$CC" $FLAGS $SQL -o "$OUT/AmiPortAtlas" $COMMON "$S/ui.c" "$S/app.c" $SQLSRC "$OUT/olui/libolui.a" $SQLLIB -lamiga
 "$CC" $FLAGS $SQL -o "$OUT/Atlas" $COMMON "$S/ftp.c" "$S/atlas.c" $SQLSRC $SQLLIB -lamiga
 for f in "$OUT/AmiPortAtlas" "$OUT/Atlas"; do
     echo "$f ($(wc -c < "$f") bytes) $(sha256sum "$f" | cut -c1-16)"
