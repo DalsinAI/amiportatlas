@@ -27,6 +27,7 @@ typedef struct UiHost {
     void (*scan)(void *data);                                 /* Find installed */
     const char *(*source_name)(void *data, const char *id);   /* a source's name, for the facts */
     int  (*is_new)(void *data, const Port *p);                /* new or updated lately, for the New section; may be NULL */
+    void (*full_screen)(void *data);                          /* Full screen: the joystick mode (big.h); may be NULL */
 } UiHost;
 
 /* Makes the window's contents in ui (after the theme's CSS is added). */
@@ -50,6 +51,8 @@ void ui_tick(void);
 Port *ui_selected(void);
 void  ui_select_row(int row);
 int   ui_rows(void);
+Port *ui_row(int row);                  /* the game on row (NULL past the end): for the full screen mode */
+int   ui_current_row(void);             /* the selected game's row, or -1 */
 
 /* The sections above the list are found, not fixed: All and New, then a
  * tab for each drawer at the top of the Games drive (ui_set_drawers: the

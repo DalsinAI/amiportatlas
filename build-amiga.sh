@@ -69,7 +69,7 @@ FLAGS="-m68040 -specs=$SPECS -noixemul -O2 -fno-delete-null-pointer-checks $LATE
   -Wall -Wextra -Wno-unused-parameter -Wno-pointer-sign -DAP_HAVE_GFOPENTLS -I$OLUI/include -I$TLS/include"
 S=$HERE/src
 COMMON="$S/json.c $S/feed.c $S/sources.c $S/index.c $S/sha256.c $S/match.c $S/gamesfolders.c $S/http.c $S/install.c $S/platform.c $S/repo.c"
-"$CC" $FLAGS $SQL -o "$OUT/AmiPortAtlas" $COMMON "$S/ui.c" "$S/app.c" $SQLSRC "$OUT/olui/libolui.a" $SQLLIB -lamiga
+"$CC" $FLAGS $SQL -o "$OUT/AmiPortAtlas" $COMMON "$S/ui.c" "$S/big.c" "$S/app.c" $SQLSRC "$OUT/olui/libolui.a" $SQLLIB -lamiga
 "$CC" $FLAGS $SQL -o "$OUT/Atlas" $COMMON "$S/ftp.c" "$S/atlas.c" $SQLSRC $SQLLIB -lamiga
 for f in "$OUT/AmiPortAtlas" "$OUT/Atlas"; do
     echo "$f ($(wc -c < "$f") bytes) $(sha256sum "$f" | cut -c1-16)"

@@ -33,6 +33,7 @@ static const char markup[] =
 "   <option>State</option><option>Fit</option></select>"
 "  <button id=scan title='Look on DH0: to DH15: for games that are already installed'>Find installed</button>"
 "  <button id=updates title='Read every source again'>Check for updates</button>"
+"  <button id=big title='The games on a screen of their own, for a joystick'>Full screen</button>"
 " </row>"
 " <row id=middle>"
 "  <fieldset id=game><legend id=gname>AmiPortAtlas</legend>"
@@ -425,6 +426,8 @@ void ui_select_row(int row)
 
 Port *ui_selected(void) { return sel; }
 int   ui_rows(void) { return nshown; }
+Port *ui_row(int row) { return row >= 0 && row < nshown ? shown[row] : NULL; }
+int   ui_current_row(void) { int i; for (i = 0; i < nshown; i++) if (shown[i] == sel) return i; return -1; }
 
 /* ---- events ---- */
 
@@ -547,6 +550,7 @@ static void on_button(olui *ui, const olui_event *ev, void *d)
     else if (strcmp(ev->id, "next") == 0) show_shot(shot + 1);
     else if (strcmp(ev->id, "updates") == 0) { if (H->refresh) H->refresh(H->data); }
     else if (strcmp(ev->id, "scan") == 0) { if (H->scan) H->scan(H->data); }
+    else if (strcmp(ev->id, "big") == 0) { if (H->full_screen) H->full_screen(H->data); }
     else if (!sel) return;
     else if (strcmp(ev->id, "install") == 0) {
         if (installed(sel) && !is_update(sel)) { if (H->launch) H->launch(H->data, sel); }
@@ -581,6 +585,7 @@ int ui_build(olui *ui, UiHost *host, char *err, size_t errlen)
     olui_on(ui, "next", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "updates", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "scan", OLUI_CLICK, on_button, NULL);
+    olui_on(ui, "big", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "install", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "release", OLUI_CLICK, on_button, NULL);
     olui_on(ui, "remove", OLUI_CLICK, on_button, NULL);

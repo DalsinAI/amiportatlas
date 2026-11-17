@@ -36,6 +36,9 @@
 #include "ui.h"
 #include "gamesfolders.h"
 #include "cxcmd.h"
+#include "big.h"
+#include <libraries/lowlevel.h>
+#include <proto/lowlevel.h>
 #ifdef AP_HAVE_SQLITE
 #include "gamesindex.h"
 #endif
@@ -64,6 +67,11 @@ static struct {
     int offline;                 /* no network for pictures: none fetched until a refresh */
     WORD box[4];                 /* where the window was, for the next time it opens */
     int loaded;                  /* the sources and the index read: the first time the window opens */
+    olui *cur;                   /* what is on show: the window's ui, or the full screen's */
+    olui *big;                   /* the full screen's contents (big.c), made the first time */
+    struct Screen *screen;       /* the full screen's own screen, while it is up */
+    ULONG stick;                 /* the joystick's last reading */
+    int held;
 } A;
 
 static void drop_old_pictures(void);
@@ -152,7 +160,7 @@ static void draw_shot(void *data, const olui_el *el, int x, int y, int w, int h)
 static void redraw_shot(void)
 {
     olui_rect r;
-    olui_el *shot = olui_find(A.ui, "shot");
+    olui_el *shot = olui_find(A.cur, "shot");
     if (A.win && shot && olui_box(A.ui, shot, &r))
         draw_shot(NULL, shot, A.win->BorderLeft + r.x, A.win->BorderTop + r.y, r.w, r.h);
 }
@@ -739,18 +747,22 @@ static void hide_window(void)
 {
     if (!A.win) return;
     drop_picture();             /* its pens are the screen's */
+    if (A.cur == A.ui) {
+        A.box[0] = A.win->LeftEdge; A.box[1] = A.win->TopEdge; A.box[2] = A.win->Width; A.box[3] = A.win->Height;
+    }
     if (A.glue) olui_amiga_free(A.glue);
     A.glue = NULL;
     free_pens();
     { int i; for (i = 0; i <= MARK_ORIGINAL; i++) A.pens[i] = -1; }
-    A.box[0] = A.win->LeftEdge; A.box[1] = A.win->TopEdge; A.box[2] = A.win->Width; A.box[3] = A.win->Height;
     CloseWindow(A.win);
     A.win = NULL;
+    if (A.screen) { CloseScreen(A.screen); A.screen = NULL; }
+    A.cur = A.ui;
 }
 
 static int show_window(void)
 {
-    if (A.win) {                /* open already: to the front */
+    if (A.win) {                /* open already (or the full screen): to the front */
         ScreenToFront(A.win->WScreen);
         WindowToFront(A.win);
         ActivateWindow(A.win);
@@ -765,6 +777,7 @@ static int show_window(void)
                            WA_Activate, TRUE, WA_SimpleRefresh, TRUE, WA_ReportMouse, TRUE,
                            WA_IDCMP, olui_amiga_idcmp(), TAG_DONE);
     if (!A.win) return 0;
+    A.cur = A.ui;
     if (!(A.glue = olui_amiga_new(A.ui, A.win))) { CloseWindow(A.win); A.win = NULL; return 0; }
     olui_amiga_theme(A.glue, NULL);  /* the theme GFOpenPrefs Look chose */
     get_pens();
@@ -774,6 +787,97 @@ static int show_window(void)
     olui_amiga_draw(A.glue);
     load_once();
     return 1;
+}
+
+/* ---- the full screen mode (big.h): a screen of its own, like Workbench's, driven by the joystick in port 2 ---- */
+
+static UiHost host;              /* what the window and the full screen ask of the program */
+static struct Library *LowLevelBase;
+#ifdef __amigaos4__
+struct LowLevelIFace *ILowLevel;
+#endif
+
+static void host_full_screen(void *data)
+{
+    char err[160];
+    (void)data;
+    if (A.screen) return;
+    if (!A.big) {
+        A.big = olui_new();
+        if (!A.big || !big_build(A.big, &host, err, sizeof err)) { if (A.big) olui_free(A.big); A.big = NULL; return; }
+    }
+    hide_window();
+    A.screen = OpenScreenTags(NULL, SA_LikeWorkbench, TRUE, SA_Title, (ULONG)"AmiPortAtlas", SA_ShowTitle, FALSE,
+                              SA_Quiet, TRUE, SA_Type, CUSTOMSCREEN, TAG_DONE);
+    if (A.screen)
+        A.win = OpenWindowTags(NULL, WA_CustomScreen, (ULONG)A.screen, WA_Left, 0, WA_Top, 0,
+                               WA_Width, A.screen->Width, WA_Height, A.screen->Height,
+                               WA_Backdrop, TRUE, WA_Borderless, TRUE, WA_Activate, TRUE, WA_RMBTrap, TRUE,
+                               WA_SimpleRefresh, TRUE, WA_ReportMouse, TRUE,
+                               WA_IDCMP, olui_amiga_idcmp() | IDCMP_RAWKEY | IDCMP_INTUITICKS, TAG_DONE);
+    if (A.win && (A.glue = olui_amiga_new(A.big, A.win))) {
+        A.cur = A.big;
+        olui_amiga_theme(A.glue, NULL);
+        get_pens();
+        olui_amiga_own(A.glue, olui_find(A.big, "shot"), draw_shot, NULL);
+        olui_amiga_layout(A.glue);
+        big_fill();
+        olui_amiga_draw(A.glue);
+        redraw_shot();
+        if (!LowLevelBase) {
+            LowLevelBase = OpenLibrary((STRPTR)"lowlevel.library", 40);
+#ifdef __amigaos4__
+            if (LowLevelBase) ILowLevel = (struct LowLevelIFace *)GetInterface(LowLevelBase, "main", 1, NULL);
+#endif
+        }
+        A.stick = LowLevelBase ? ReadJoyPort(1) : 0;   /* a button already down doesn't count */
+        A.held = 0;
+        return;
+    }
+    if (A.win) { CloseWindow(A.win); A.win = NULL; }
+    if (A.screen) { CloseScreen(A.screen); A.screen = NULL; }
+    A.cur = A.ui;
+    show_window();              /* no screen: the window again */
+}
+
+/* one move or press, from the stick or the keys */
+static void big_do(int what)
+{
+    Port *p = ui_selected();
+    switch (big_input(what)) {
+    case BIG_MOVED:   break;
+    case BIG_PLAY:    if (p) host_launch(NULL, p); break;
+    case BIG_INSTALL: if (p) host_install(NULL, p); big_fill(); break;
+    case BIG_LEAVE:   hide_window(); show_window(); return;
+    }
+    if (A.glue) olui_amiga_draw(A.glue);
+}
+
+/* the joystick in port 2, ten times a second */
+static void big_tick(void)
+{
+    ULONG now;
+    int what;
+    if (!LowLevelBase || !A.screen) return;
+    now = ReadJoyPort(1);
+    if ((now & JP_TYPE_MASK) != JP_TYPE_JOYSTK && (now & JP_TYPE_MASK) != JP_TYPE_GAMECTLR) { A.stick = now; return; }
+    what = big_stick(now, A.stick, &A.held, 4, 1);
+    A.stick = now;
+    if (what != BIG_NONE) big_do(what);
+}
+
+/* the keys: cursors, Return or Space to fire, Esc to go back; 1 when it was one of them */
+static int big_key(UWORD code)
+{
+    switch (code) {
+    case 0x4C: big_do(BIG_UP); return 1;
+    case 0x4D: big_do(BIG_DOWN); return 1;
+    case 0x4F: big_do(BIG_LEFT); return 1;
+    case 0x4E: big_do(BIG_RIGHT); return 1;
+    case 0x44: case 0x43: case 0x40: big_do(BIG_FIRE); return 1;
+    case 0x45: big_do(BIG_BACK); return 1;
+    }
+    return 0;
 }
 
 /* ---- the commodity: in the systray with the others while it runs ---- */
@@ -832,7 +936,6 @@ int main(int argc, char **argv)
     const char *missing = NULL;
     char err[200];
     int done = 0, rc = 20, disabled = 0;
-    UiHost host;
     apcx_opts opts;
     struct MsgPort *cxport = NULL;
     CxObj *broker = NULL;
@@ -877,6 +980,7 @@ int main(int argc, char **argv)
     host.scan = host_scan;
     host.source_name = host_source_name;
     host.is_new = host_is_new;
+    host.full_screen = host_full_screen;
     if (!ui_build(A.ui, &host, err, sizeof err)) { printf("AmiPortAtlas: %s\n", err); goto out; }
 
     /* without a broker there is nothing to bring the window back: it always opens, and closing it ends the program */
@@ -889,9 +993,19 @@ int main(int argc, char **argv)
         if (sig & SIGBREAKF_CTRL_C) break;
         while (A.win && (m = (struct IntuiMessage *)GetMsg(A.win->UserPort)) != NULL) {
             ULONG cls = m->Class;
-            int r = olui_amiga_event(A.glue, m);
+            UWORD code = m->Code;
+            int r;
+            if (A.screen && cls == IDCMP_RAWKEY) {          /* the full screen: the keys are the stick's */
+                ReplyMsg((struct Message *)m);
+                big_key(code);
+                break;                                      /* the screen may have gone */
+            }
+            r = olui_amiga_event(A.glue, m);
             ReplyMsg((struct Message *)m);
-            if (cls == IDCMP_INTUITICKS) ui_tick();
+            if (cls == IDCMP_INTUITICKS) {
+                ui_tick();
+                if (A.screen) { big_tick(); if (!A.screen) break; }
+            }
             if (r == OLUI_AMIGA_CLOSE) {
                 if (broker) hide_window();   /* still in the systray */
                 else done = 1;
@@ -921,6 +1035,11 @@ out:
     if (ICommodities) DropInterface((struct Interface *)ICommodities);
 #endif
     if (CxBase) CloseLibrary(CxBase);
+#ifdef __amigaos4__
+    if (ILowLevel) DropInterface((struct Interface *)ILowLevel);
+#endif
+    if (LowLevelBase) CloseLibrary(LowLevelBase);
+    if (A.big) olui_free(A.big);
     if (A.ui) olui_free(A.ui);
     feed_free(A.feed);
     sources_free(A.sources);
