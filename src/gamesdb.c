@@ -11,6 +11,7 @@
 struct GamesDb {
     sqlite3 *sql;
     char     err[160];
+    char     today[12];
 };
 
 static const char *const folder_names[GF_COUNT] = { "Ports", "WHDLoad", "Itch.io", "Aminet", "Exclusive" };
@@ -80,7 +81,8 @@ static const char schema_sql[] =
     " space INTEGER, download_url TEXT, download_size INTEGER, download_sha256 TEXT, release_url TEXT,"
     " port_repo TEXT, drawer TEXT COLLATE NOCASE, program TEXT, install TEXT, shot TEXT,"
     " listed INTEGER NOT NULL DEFAULT 0, installed_version TEXT, found INTEGER NOT NULL DEFAULT 0,"
-    " path TEXT, found_program TEXT);"
+    " path TEXT, found_program TEXT, first_seen TEXT, updated TEXT);"
+    "CREATE INDEX games_by_news ON games (first_seen, updated);"
     "CREATE INDEX games_by_title ON games (title);"
     "CREATE INDEX games_by_folder ON games (folder, title);"
     "CREATE INDEX games_by_drawer ON games (folder, drawer);"
@@ -230,9 +232,12 @@ done:
 static const char put_sql[] =
     "INSERT INTO games (id, source, folder, number, origin, kind, title, year, state, fit, game_data, version,"
     " summary, author, category, cpu, fpu, space, download_url, download_size, download_sha256, release_url,"
-    " port_repo, drawer, program, install, shot, listed)"
-    " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,1)"
-    " ON CONFLICT (id) DO UPDATE SET source=excluded.source, folder=excluded.folder, number=excluded.number,"
+    " port_repo, drawer, program, install, shot, listed, first_seen)"
+    " VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26,?27,1,?28)"
+    " ON CONFLICT (id) DO UPDATE SET"
+    " updated = CASE WHEN ?28 IS NOT NULL AND excluded.version IS NOT NULL AND games.version IS NOT excluded.version"
+    "  THEN ?28 ELSE games.updated END,"
+    " source=excluded.source, folder=excluded.folder, number=excluded.number,"
     " origin=excluded.origin, kind=excluded.kind, title=excluded.title, year=excluded.year, state=excluded.state,"
     " fit=excluded.fit, game_data=excluded.game_data, version=excluded.version, summary=excluded.summary,"
     " author=excluded.author, category=excluded.category, cpu=excluded.cpu, fpu=excluded.fpu, space=excluded.space,"
@@ -254,10 +259,35 @@ static int put_list(GamesDb *db, sqlite3_stmt *st, const char *id, const char *w
     return 1;
 }
 
+void gamesdb_set_today(GamesDb *db, const char *date)
+{
+    snprintf(db->today, sizeof db->today, "%s", date ? date : "");
+}
+
+static long gamesdb_count_listed(GamesDb *db)
+{
+    char out[24];
+    return gamesdb_text(db, "SELECT count(*) FROM games WHERE listed = 1", out, (int)sizeof out) ? atol(out) : 0;
+}
+
+long gamesdb_new_since(GamesDb *db, const char *date)
+{
+    sqlite3_stmt *st;
+    long n = -1;
+    if (sqlite3_prepare_v2(db->sql, "SELECT count(*) FROM games WHERE listed = 1 AND (first_seen >= ?1 OR updated >= ?1)",
+                           -1, &st, NULL) != SQLITE_OK) { fail(db); return -1; }
+    sqlite3_bind_text(st, 1, date, -1, SQLITE_TRANSIENT);
+    if (sqlite3_step(st) == SQLITE_ROW) n = (long)sqlite3_column_int64(st, 0); else fail(db);
+    sqlite3_finalize(st);
+    return n;
+}
+
 int gamesdb_put_feed(GamesDb *db, const Feed *f)
 {
     sqlite3_stmt *put = NULL, *shot = NULL, *need = NULL;
-    int i, k, n = 0, ok = 0;
+    int i, k, n = 0, ok = 0, dated;
+    /* The first fill of an empty index dates nothing. */
+    dated = db->today[0] && gamesdb_count_listed(db) > 0;
     if (!run(db, "BEGIN")) return -1;
     /* Rows found on disk alone ("disk:...") were never listed and are not the feed's to change. */
     if (!run(db, "UPDATE games SET listed = 0 WHERE listed = 1") || !run(db, "DELETE FROM shots")
@@ -298,6 +328,7 @@ int gamesdb_put_feed(GamesDb *db, const Feed *f)
         bind_text(put, 25, p->program);
         bind_text(put, 26, p->install);
         bind_text(put, 27, p->nshots > 0 ? p->shots[0] : NULL);
+        if (dated) sqlite3_bind_text(put, 28, db->today, -1, SQLITE_STATIC); else sqlite3_bind_null(put, 28);
         if (sqlite3_step(put) != SQLITE_DONE) { fail(db); goto done; }
         sqlite3_reset(put);
         for (k = 0; k < p->nshots; k++) {
