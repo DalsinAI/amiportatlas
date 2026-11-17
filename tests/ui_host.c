@@ -215,10 +215,11 @@ int main(int argc, char **argv)
         olui_el *tabs = olui_find(ui, "sections");
         CHECK(tabs != NULL && olui_tabs_current(tabs) == 0 && ui_section() == 0);
         /* no Games drive: only the drawers the sources have games for */
-        CHECK(ui_sections() == 5);
+        CHECK(ui_sections() == 6);
         CHECK(strcmp(ui_section_name(0), "All") == 0 && strcmp(ui_section_name(1), "New") == 0);
         CHECK(strcmp(ui_section_name(2), "Ports") == 0 && strcmp(ui_section_name(3), "Aminet") == 0
-              && strcmp(ui_section_name(4), "Exclusive") == 0 && ui_section_name(5) == NULL);
+              && strcmp(ui_section_name(4), "Exclusive") == 0
+              && strcmp(ui_section_name(5), "More Games") == 0 && ui_section_name(6) == NULL);   /* a game was found in it */
         CHECK(ui_find_section("WHDLoad") == -1 && ui_find_section("aminet") == 3);
         ui_set_section(3);                                  /* Aminet: Tiny Tetris */
         CHECK(ui_rows() == 1 && ui_selected() && strcmp(ui_selected()->title, "Tiny Tetris") == 0);
@@ -252,9 +253,9 @@ int main(int argc, char **argv)
         CHECK(n + 1 + 1 + ui_rows() == all);                /* every game is in one drawer */
         ui_set_section(8); CHECK(ui_section() == 6);        /* no such section */
         /* a drawer that goes while it is shown: back to All */
-        ui_set_section(7);
+        ui_set_section(4);
         ui_set_drawers(on_drive, 2);
-        CHECK(ui_sections() == 6 && ui_section() == 0 && ui_rows() == all && ui_find_section("More Games") == -1);
+        CHECK(ui_sections() == 7 && ui_section() == 0 && ui_rows() == all && ui_find_section("Itch.io") == -1);
         ui_set_drawers(on_drive, 5);
         /* a click on a tab does the same */
         {
