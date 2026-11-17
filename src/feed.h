@@ -43,6 +43,7 @@ typedef struct Port {
     char *author;
     char *category;        /* the source's own: "game/think", "Games/Puzzle" */
     char *install;         /* "script" (when none): run its Install-DRAWER; "unpack": its drawer is copied */
+    char *disk_path;       /* a game only found on the Games drive: its drawer ("Games:WHDLoad/Lemmings") */
 } Port;
 
 typedef struct Feed {

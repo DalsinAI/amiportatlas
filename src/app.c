@@ -374,7 +374,6 @@ static void disk_one(void *user, const char *id, const char *folder, const char 
     struct DiskAdd *a = (struct DiskAdd *)user;
     Feed *f = a->f;
     Port *p;
-    (void)path;
     if (!id || !folder || !title) return;
     if (f->count >= a->cap) {
         int cap = f->count + 256;
@@ -391,6 +390,7 @@ static void disk_one(void *user, const char *id, const char *folder, const char 
     p->source = strdup(DISK_SOURCE);
     p->kind = strdup("game");
     p->category = strdup(folder);
+    p->disk_path = path ? strdup(path) : NULL;
     if (!p->id || !p->title || !p->drawer || !p->source || !p->kind || !p->category) { port_free(p); return; }
     f->count++;
 }
@@ -699,10 +699,56 @@ static void host_scan(void *data)
     status(line);
 }
 
+/* A game found on the Games drive, in no source: the icon in its drawer that starts it (games_pick_start), else
+ * the drawer itself opens on Workbench so the player can pick. */
+static int disk_start(const Port *p, char *why, int whylen)
+{
+    static char names[48][108];
+    const char *pn[48];
+    int tool[48], n = 0, k;
+    char path[400];
+    struct FileInfoBlock *fib;
+    BPTR l;
+    if (!p->disk_path) { snprintf(why, (size_t)whylen, "AmiPortAtlas doesn't know where %s is. Refresh the list.", p->title); return 0; }
+    if (!(l = Lock((STRPTR)p->disk_path, ACCESS_READ))) {
+        snprintf(why, (size_t)whylen, "%s is no longer there. Was it moved?", p->disk_path);
+        return 0;
+    }
+    if ((fib = (struct FileInfoBlock *)AllocDosObject(DOS_FIB, NULL)) && Examine(l, fib)) {
+        while (n < 48 && ExNext(l, fib)) {
+            const char *name = (const char *)fib->fib_FileName;
+            size_t len = strlen(name);
+            struct DiskObject *d;
+            if (fib->fib_DirEntryType > 0 || len <= 5 || len - 5 >= sizeof names[0] || strcmp(name + len - 5, ".info") != 0) continue;
+            memcpy(names[n], name, len - 5);
+            names[n][len - 5] = 0;
+            snprintf(path, sizeof path, "%s/%s", p->disk_path, names[n]);
+            if (!(d = GetDiskObject((STRPTR)path))) continue;
+            if (d->do_Type == WBTOOL || d->do_Type == WBPROJECT) {
+                tool[n] = d->do_Type == WBTOOL;
+                pn[n] = names[n];
+                n++;
+            }
+            FreeDiskObject(d);
+        }
+    }
+    if (fib) FreeDosObject(DOS_FIB, fib);
+    UnLock(l);
+    k = games_pick_start(FilePart((STRPTR)p->disk_path), pn, tool, n);
+    if (k >= 0) {
+        snprintf(path, sizeof path, "%s/%s", p->disk_path, names[k]);
+        if (platform_launch(path)) return 1;
+    }
+    if (platform_launch(p->disk_path)) return 1;   /* the drawer, to choose from */
+    snprintf(why, (size_t)whylen, "%s could not be opened.", p->disk_path);
+    return 0;
+}
+
 static void host_launch(void *data, Port *p)
 {
     char why[240];
     (void)data;
+    if (port_on_disk_only(p)) { if (!disk_start(p, why, (int)sizeof why)) ask(why, "OK"); return; }
     if (!install_launch(p, why, (int)sizeof why)) ask(why, "OK");
 }
 

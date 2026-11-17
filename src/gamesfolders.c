@@ -83,3 +83,55 @@ int games_shelf_drawer(const char *name)
 {
     return name && ((name[0] && !name[1]) || strcmp(name, "0-9") == 0);
 }
+
+static int same_word(const char *a, const char *b)
+{
+    for (; *a && *b; a++, b++) {
+        int x = (unsigned char)*a, y = (unsigned char)*b;
+        if (x >= 'A' && x <= 'Z') x += 32;
+        if (y >= 'A' && y <= 'Z') y += 32;
+        if (x != y) return 0;
+    }
+    return *a == *b;
+}
+
+static int begins(const char *s, const char *with)
+{
+    for (; *with; s++, with++) {
+        int x = (unsigned char)*s;
+        if (x >= 'A' && x <= 'Z') x += 32;
+        if (x != *with) return 0;
+    }
+    return 1;
+}
+
+/* not a game's own start: a read-me, a guide, an installer */
+static int not_a_start(const char *name)
+{
+    static const char *const no[] = { "readme", "read me", "read_me", "liesmich", "install", "uninstall", "setup",
+                                      "manual", "guide", "docs", "doc", "license", "licence", "copying", "history",
+                                      "changes", "faq", "help", "config", "prefs", "edit", NULL };
+    int i;
+    size_t n = strlen(name);
+    if (n > 6 && same_word(name + n - 6, ".guide")) return 1;
+    if (n > 4 && (same_word(name + n - 4, ".txt") || same_word(name + n - 4, ".doc") || same_word(name + n - 4, ".pdf")
+                  || same_word(name + n - 4, ".htm"))) return 1;
+    if (n > 5 && same_word(name + n - 5, ".html")) return 1;
+    for (i = 0; no[i]; i++) if (begins(name, no[i])) return 1;
+    return 0;
+}
+
+int games_pick_start(const char *drawer, const char *const *names, const int *tool, int n)
+{
+    int i, tools = 0, last = -1;
+    if (!names || !tool || n <= 0) return -1;
+    if (drawer)
+        for (i = 0; i < n; i++) if (tool[i] && names[i] && same_word(names[i], drawer)) return i;
+    if (drawer)
+        for (i = 0; i < n; i++) if (!tool[i] && names[i] && same_word(names[i], drawer)) return i;
+    for (i = 0; i < n; i++) if (tool[i] && names[i]) { tools++; last = i; }
+    if (tools == 1) return last;
+    for (i = 0; i < n; i++) if (tool[i] && names[i] && !not_a_start(names[i])) return i;
+    for (i = 0; i < n; i++) if (!tool[i] && names[i] && !not_a_start(names[i])) return i;
+    return -1;
+}
