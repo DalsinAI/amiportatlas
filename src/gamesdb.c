@@ -215,6 +215,18 @@ static long gamesdb_count_listed(GamesDb *db)
     return gamesdb_text(db, "SELECT count(*) FROM games WHERE listed = 1", out, (int)sizeof out) ? atol(out) : 0;
 }
 
+long gamesdb_each_new(GamesDb *db, const char *date, GamesDbIdFn fn, void *user)
+{
+    sqlite3_stmt *st;
+    long n = 0;
+    if (sqlite3_prepare_v2(db->sql, "SELECT id FROM games WHERE listed = 1 AND (first_seen >= ?1 OR updated >= ?1)"
+                           " ORDER BY id COLLATE BINARY", -1, &st, NULL) != SQLITE_OK) { fail(db); return -1; }
+    sqlite3_bind_text(st, 1, date, -1, SQLITE_TRANSIENT);
+    while (sqlite3_step(st) == SQLITE_ROW) { fn(user, (const char *)sqlite3_column_text(st, 0)); n++; }
+    sqlite3_finalize(st);
+    return n;
+}
+
 long gamesdb_new_since(GamesDb *db, const char *date)
 {
     sqlite3_stmt *st;

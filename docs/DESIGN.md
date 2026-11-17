@@ -42,6 +42,7 @@ anything without a release greyed; the buttons bottom right, read last.
 | `src/ftp.c`, `src/net.h` | FTP and FTPS (AUTH TLS) for PUBLISH, on http.c's connections |
 | `src/atlas.c` | Atlas, the Shell command |
 | `src/gamesfolders.c` | the Games drive's five drawers and which a game belongs in; plain C, host-tested |
+| `src/gamesindex.c` | the index made and read on the Amiga: the look through the Games drive, today's date, the news; for Atlas and the window |
 | `src/gamesdb.c` | the games index, an SQLite database of every game listed and every game on the Games drive ([GAMES.md](GAMES.md)); plain C and SQLite, host-tested |
 | `src/sha256.c` | SHA-256; plain C, host-tested |
 | `src/http.c` | HTTP/1.1 GET over bsdsocket.library and GFOpenTLS; redirects, chunked |

@@ -100,13 +100,17 @@ installed. A drawer's tab shows the games that belong in it
 index dates as new or updated. Find, Show, Fit, From and the sorting work
 inside whichever section is shown.
 
+## Who makes the index
+
+AmiPortAtlas makes it again each time it reads the sources (at its start
+and at Check for updates), when there is a Games drive; `Atlas INDEX`
+makes it from the Shell. Both use `src/gamesindex.c`. The New section
+shows what the index dates as new or updated in the last 14 days.
+
 ## Still to do
 
-1. The index built on the Amiga: AmiPortAtlas and Atlas linked with
-   DalsinAI/gfopensqlite (soft float, one task), `Atlas INDEX` to make it
-   from the Shell, and the five drawers looked through.
-2. The window reading the index: the five drawers as its sections, and
-   the New page.
+1. Games found on the drive that no source lists (a WHDLoad set) shown
+   in the window's list: the index has them, the list does not yet.
 3. The launcher as a commodity, in the systray once started.
 4. The full screen mode driven by a joystick.
 5. Sources for WHDLoad, itch.io and Aminet: what each may fetch.

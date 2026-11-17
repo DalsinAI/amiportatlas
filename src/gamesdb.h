@@ -47,6 +47,11 @@ int  gamesdb_put_feed(GamesDb *db, const Feed *f);
  * every game would be new on the first day. Not set, nothing is dated. */
 void gamesdb_set_today(GamesDb *db, const char *date);
 
+/* Each entry new or updated on or after date given to fn, by its id, in the
+ * order strcmp puts them. How many, -1 on failure. */
+typedef void (*GamesDbIdFn)(void *user, const char *id);
+long gamesdb_each_new(GamesDb *db, const char *date, GamesDbIdFn fn, void *user);
+
 /* How many entries are new or updated on or after date. -1 on failure. */
 long gamesdb_new_since(GamesDb *db, const char *date);
 
