@@ -43,7 +43,7 @@ with an older number is made again empty, a newer one is refused.
 | --- | --- | --- |
 | `folders` | the five drawers | `folder` (0 to 4, the order above), `name` |
 | `sources` | the sources as last read | `id`, `name`, `home`, `idx` (the index's address), `note`, `is_on`, `checked`, `folder` |
-| `games` | one a game or program | below |
+| `games` | one for each game or program | below |
 | `shots` | a game's pictures | `game`, `n` (0 is the main one), `url` |
 | `needs` | what a game needs | `game`, `what` (`requires` or `module`), `name` |
 | `meta` | `generated`: the Atlas's date | `key`, `value` |
