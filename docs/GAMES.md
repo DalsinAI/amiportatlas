@@ -41,7 +41,7 @@ with an older number is made again empty, a newer one is refused.
 
 | Table | Rows | Columns |
 | --- | --- | --- |
-| `folders` | the five drawers | `folder` (0 to 4, the order above), `name` |
+| `folders` | the five drawers, and any other at the top of the drive | `folder` (0 to 4, the order above; from 5 the player's own), `name` |
 | `sources` | the sources as last read | `id`, `name`, `home`, `idx` (the index's address), `note`, `is_on`, `checked`, `folder` |
 | `games` | one for each game or program | below |
 | `shots` | a game's pictures | `game`, `n` (0 is the main one), `url` |
@@ -107,10 +107,20 @@ and at Check for updates), when there is a Games drive; `Atlas INDEX`
 makes it from the Shell. Both use `src/gamesindex.c`. The New section
 shows what the index dates as new or updated in the last 14 days.
 
+## Games that are only on the drive
+
+Every drawer at the top of `Games:` is looked through, not only the five
+(the launcher's own drawer aside): one the player made is a folder too,
+numbered from 5 in `folders` and found again each time the index is made.
+A drawer in it that no source lists gets a `disk:` row, and the window
+adds those rows to its list after the sources' entries (source `disk`,
+state "On disk", "found" under Installed), each under the tab of the
+drawer it is in. In a drawer the player made, a drawer named as a listed
+game's marks that game found instead, so a port kept in `Games:Ported`
+is not shown twice.
+
 ## Still to do
 
-1. Games found on the drive that no source lists (a WHDLoad set) shown
-   in the window's list: the index has them, the list does not yet.
 3. The launcher as a commodity, in the systray once started.
 4. The full screen mode driven by a joystick.
 5. Sources for WHDLoad, itch.io and Aminet: what each may fetch.

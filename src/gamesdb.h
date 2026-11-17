@@ -64,14 +64,28 @@ int  gamesdb_set_installed(GamesDb *db, const char *id, const char *version, con
  * again. Games installed through AmiPortAtlas stay. */
 int  gamesdb_clear_found(GamesDb *db);
 
+/* The number of the drawer at the top of the Games drive with that name
+ * (without case): one of the five, or one the player made, which gets the
+ * next number the first time it is asked for. -1 on failure. */
+int  gamesdb_folder(GamesDb *db, const char *name);
+
 /* A drawer found in one of the Games drive's drawers: path is the drawer's
  * full name ("Games:WHDLoad/Lemmings"), program the file that starts it or
  * NULL. A listed game of that drawer whose own drawer has this name
- * (without case) is marked found; else it is a game no source lists and
- * gets a row of its own, "disk:whdload/lemmings", titled as its drawer.
+ * (without case) is marked found; in a drawer the player made, a listed
+ * game of any drawer is. Else it is a game no source lists and gets a row
+ * of its own, "disk:whdload/lemmings", titled as its drawer. folder is one
+ * of the five or a number gamesdb_folder gave.
  * Answers 1 when it matched a listed game, 0 when it made or kept a row of
  * its own, -1 on failure. */
 int  gamesdb_put_found(GamesDb *db, int folder, const char *drawer, const char *path, const char *program);
+
+/* Each game on the drive that no source lists given to fn: its id, the name
+ * of the drawer at the top of the drive it is in, its title and its own
+ * drawer's full name, as UTF-8, ordered by drawer then title. How many, -1
+ * on failure. */
+typedef void (*GamesDbFoundFn)(void *user, const char *id, const char *folder, const char *title, const char *path);
+long gamesdb_each_found(GamesDb *db, GamesDbFoundFn fn, void *user);
 
 /* How many games (kind "game"): in one drawer, or with GF_NONE in all the
  * index; with here set, only those on this machine. -1 on failure. */

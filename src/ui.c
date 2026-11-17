@@ -135,7 +135,11 @@ static void set_text(const char *id, const char *text)
     if (e) olui_set_text(U, e, text ? text : "");
 }
 
-static const char *installed(const Port *p) { return H && H->installed ? H->installed(H->data, p) : NULL; }
+static const char *installed(const Port *p)
+{
+    const char *v = H && H->installed ? H->installed(H->data, p) : NULL;
+    return v ? v : port_on_disk_only(p) ? "found" : NULL;      /* on the Games drive, in no source */
+}
 
 /* A release address as the facts show it: a release's tag, else the
  * address without https:// and www. (Release page opens the whole one). */
@@ -195,7 +199,7 @@ static int passes(const Port *p)
 {
     if (section == SEC_NEW && !(H->is_new && H->is_new(H->data, p))) return 0;
     if (section >= SEC_FOLDER) {
-        const char *in = section - SEC_FOLDER < nsec ? games_folder_name(games_folder_of(p)) : NULL;
+        const char *in = section - SEC_FOLDER < nsec ? games_drawer_of(p) : NULL;
         if (!in || !same_name(in, sec_name[section - SEC_FOLDER])) return 0;
     }
     if (find_text[0] && !contains(p->title, find_text) && !(p->summary && contains(p->summary, find_text))) return 0;
@@ -233,7 +237,7 @@ static const char *cell(void *data, int row, int column, int *image)
         return b;
     case 1: return p->title;
     case 2: snprintf(b, 24, "%.4s", p->year ? p->year : ""); return b;
-    case 3: return is_update(p) ? "Update" : port_state_text(p);
+    case 3: return is_update(p) ? "Update" : port_on_disk_only(p) ? "On disk" : port_state_text(p);
     case 4: return p->fit ? p->fit : "";
     case 5: return p->version && state_is(p, "released") ? p->version : "";
     case 6: v = installed(p); return v ? v : "";
@@ -362,7 +366,8 @@ static void select_port(Port *p)
     set_text("gname", p ? p->title : "AmiPortAtlas");
     inst = p ? installed(p) : NULL;
     if (p) {
-        if (p->version && state_is(p, "released")) snprintf(line, sizeof line, "%s", p->version);
+        if (port_on_disk_only(p)) snprintf(line, sizeof line, "On the Games drive, in no source's list");
+        else if (p->version && state_is(p, "released")) snprintf(line, sizeof line, "%s", p->version);
         else snprintf(line, sizeof line, "Not released yet (%s)", port_state_text(p));
         fact("version", line);
         fact("installed", inst);
@@ -445,6 +450,7 @@ static void on_section(olui *ui, const olui_event *ev, void *d)
     (void)d;
     section = olui_tabs_current(olui_find(ui, ev->id));
     fill();
+    ui_select_row(nshown ? 0 : -1);     /* the facts follow the list */
 }
 
 static void sec_add(char list[][SEC_NAME], int *n, const char *name)
@@ -483,6 +489,8 @@ static void sections(void)
         if (there) sec_add(want, &n, games_folder_name(i));
     }
     for (j = 0; j < ndrawers; j++) sec_add(want, &n, drawer_name[j]);   /* then any other drawer on the drive */
+    for (i = 0; F && i < F->count; i++)                                 /* and one a game was found in */
+        if (port_on_disk_only(&F->ports[i])) sec_add(want, &n, games_drawer_of(&F->ports[i]));
     same = old != NULL && n == nsec;
     for (i = 0; same && i < n; i++) same = strcmp(want[i], sec_name[i]) == 0;
     if (same) return;
