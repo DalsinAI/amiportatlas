@@ -778,10 +778,19 @@ static int show_window(void)
 
 /* ---- the commodity: in the systray with the others while it runs ---- */
 
-#if CXCMD_DISABLE != APCX_DISABLE || CXCMD_ENABLE != APCX_ENABLE || CXCMD_APPEAR != APCX_APPEAR || \
-    CXCMD_DISAPPEAR != APCX_DISAPPEAR || CXCMD_KILL != APCX_KILL || CXCMD_UNIQUE != APCX_UNIQUE
-#error cxcmd.h's command numbers differ from libraries/commodities.h
-#endif
+/* commodities.library's command to cxcmd.h's */
+static long cx_command(ULONG id)
+{
+    switch (id) {
+    case CXCMD_DISABLE:   return APCX_DISABLE;
+    case CXCMD_ENABLE:    return APCX_ENABLE;
+    case CXCMD_APPEAR:    return APCX_APPEAR;
+    case CXCMD_DISAPPEAR: return APCX_DISAPPEAR;
+    case CXCMD_KILL:      return APCX_KILL;
+    case CXCMD_UNIQUE:    return APCX_UNIQUE;
+    }
+    return 0;
+}
 
 #ifdef __amigaos4__
 struct CommoditiesIFace *ICommodities;
@@ -894,7 +903,7 @@ int main(int argc, char **argv)
             int act = 0;
             ReplyMsg((struct Message *)cm);
             if (type == CXM_IEVENT && id == CX_ID_POP) act = disabled ? 0 : APCX_SHOW;
-            else if (type == CXM_COMMAND) act = apcx_do((long)id, A.win != NULL, disabled);
+            else if (type == CXM_COMMAND) act = apcx_do(cx_command(id), A.win != NULL, disabled);
             if (act & APCX_OFF) { ActivateCxObj(broker, 0); disabled = 1; }
             if (act & APCX_ON) { ActivateCxObj(broker, 1); disabled = 0; }
             if (act & APCX_HIDE) hide_window();

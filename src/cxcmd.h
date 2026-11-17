@@ -17,8 +17,8 @@ typedef struct apcx_opts {
     char popkey[APCX_KEYLEN];       /* "" for none */
 } apcx_opts;
 
-/* commodities.library's command numbers (libraries/commodities.h), so this header needs no system one */
-enum { APCX_DISABLE = 15, APCX_ENABLE = 17, APCX_APPEAR = 19, APCX_DISAPPEAR = 21, APCX_KILL = 23, APCX_UNIQUE = 25 };
+/* Exchange's commands (app.c turns commodities.library's CXCMD_ numbers into these), so this header needs no system one */
+enum { APCX_DISABLE = 1, APCX_ENABLE, APCX_APPEAR, APCX_DISAPPEAR, APCX_KILL, APCX_UNIQUE };
 
 /* what a command asks of the program */
 #define APCX_SHOW      1    /* open the window (it may be open already: then to the front) */
