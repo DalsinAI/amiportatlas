@@ -29,7 +29,7 @@ CC68K   ?= m68k-amigaos-gcc
 
 COMMON  = src/json.c src/feed.c src/sources.c src/index.c src/sha256.c src/match.c src/gamesfolders.c
 NETWORK = src/http.c src/install.c src/platform.c src/repo.c
-AMIGA   = $(COMMON) $(NETWORK) src/ui.c src/app.c
+AMIGA   = $(COMMON) $(NETWORK) src/ui.c src/big.c src/app.c
 ATLAS   = $(COMMON) $(NETWORK) src/ftp.c src/atlas.c
 CWARN   = -Wall -Wextra -Wno-unused-parameter -Wno-pointer-sign
 OLUI_HOST = $(OLUI)/src/openlayout.c $(OLUI)/src/gfcss_parse.c $(OLUI)/src/gfcss_values.c \
@@ -39,10 +39,11 @@ OLUI_HOST = $(OLUI)/src/openlayout.c $(OLUI)/src/gfcss_parse.c $(OLUI)/src/gfcss
 .PHONY: all test test-games render os3 clean
 all: test
 
-test: $(OUT)/test_host $(OUT)/ui_host $(OUT)/test_cx test-games
+test: $(OUT)/test_host $(OUT)/ui_host $(OUT)/big_host $(OUT)/test_cx test-games
 	$(OUT)/test_host $(FEED)
 	$(OUT)/test_cx
 	$(OUT)/ui_host $(FEED) $(THEME) $(OUT)/window-ops.txt
+	$(OUT)/big_host $(FEED) $(THEME) $(OUT)/big-ops.txt
 
 render: test
 	python3 tools/render_ui.py $(OUT)/window-ops.txt $(OUT)/window.png $(OLUI)/tests/ui_render.py $(PICTURE)
@@ -67,6 +68,11 @@ $(OUT)/ui_host: tests/ui_host.c src/ui.c src/ui.h $(COMMON)
 	@mkdir -p $(OUT)
 	$(HOSTCC) -std=c99 -O1 -g -w -I$(OLUI)/include -I$(OLUI)/ui -I$(OLUI)/src -I$(OGT)/lib -o $@ \
 	  tests/ui_host.c src/ui.c $(COMMON) $(OLUI_HOST)
+
+$(OUT)/big_host: tests/big_host.c src/big.c src/big.h src/ui.c src/ui.h $(COMMON)
+	@mkdir -p $(OUT)
+	$(HOSTCC) -std=c99 -O1 -g -w -I$(OLUI)/include -I$(OLUI)/ui -I$(OLUI)/src -I$(OGT)/lib -o $@ \
+	  tests/big_host.c src/big.c src/ui.c $(COMMON) $(OLUI_HOST)
 
 os3: $(OUT)/os3/AmiPortAtlas $(OUT)/os3/Atlas
 $(OUT)/os3/AmiPortAtlas: $(AMIGA) src/*.h

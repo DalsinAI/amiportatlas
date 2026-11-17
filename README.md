@@ -44,6 +44,16 @@ runs brings the window back. Its tool types, as every commodity's:
 From a Shell: `AmiPortAtlas CX_POPUP=NO`. Without commodities.library it is
 a plain window and closing it ends it.
 
+## Full screen, with a joystick
+
+**Full screen** puts the games on a screen of their own, for the sofa: the
+sections along the top (found on Games:, as in the window), the games in a
+column, the chosen one's picture and facts beside it. A joystick in port 2
+or the keys: left and right change section, up and down pick a game (held,
+it runs), fire plays it or installs it, fire 2 or Esc goes back.
+
+![The full screen mode](docs/images/amiportatlas-fullscreen.png)
+
 ## What it needs
 
 | | AmigaOS 3.2.3 / GFOS | AROS | AmigaOS 4.1 |
