@@ -38,11 +38,12 @@
 #include "ftp.h"
 #include "index.h"
 #include "sha256.h"
+#include "gamesfolders.h"
 #ifdef AP_HAVE_SQLITE
 #include "gamesindex.h"
 #endif
 
-const char atlas_version[] __attribute__((used)) = "$VER: Atlas 0.2.1 (06.11.2026) The AmiCradle Team";
+const char atlas_version[] __attribute__((used)) = "$VER: Atlas 0.3.0 (17.11.2026) The AmiCradle Team";
 #if !defined(__amigaos4__) && !defined(__AROS__)
 unsigned long __stack = 65536;   /* libnix swaps to this from the Shell's 4 KB */
 #endif
@@ -281,10 +282,26 @@ static void step(void *user, int s, long done, long total)
     printf("  %s %s\n", text[s], ((Port *)user)->title);
 }
 
-static void default_drawer(char *out, int max)
+/* Where p goes when TO= names nothing: the drawer the player chose last;
+ * else, on a machine with the Games drive, the game's drawer there
+ * (Games:Ports for a port), made when the drive has none. */
+static void default_drawer(const Port *p, char *out, int max)
 {
+    struct Process *me = (struct Process *)FindTask(NULL);
+    APTR win = me->pr_WindowPtr;
     BPTR l;
     if (GetVar((STRPTR)"AmiPortAtlas/Drawer", (STRPTR)out, max, GVF_GLOBAL_ONLY) > 0) return;
+    me->pr_WindowPtr = (APTR)-1;        /* no "insert volume" requester */
+    l = Lock((STRPTR)"Games:", ACCESS_READ);
+    me->pr_WindowPtr = win;
+    if (l) {
+        UnLock(l);
+        if (games_install_drawer(p, "Games:", out, max)) {
+            l = Lock((STRPTR)out, ACCESS_READ);
+            if (!l) l = CreateDir((STRPTR)out);
+            if (l) { UnLock(l); return; }
+        }
+    }
     l = Lock((STRPTR)"Work:Games", ACCESS_READ);
     if (l) { UnLock(l); snprintf(out, (size_t)max, "Work:Games"); return; }
     snprintf(out, (size_t)max, "SYS:");
@@ -312,11 +329,11 @@ static int cmd_install(void)
     int i, bad = 0;
     if (!nnames()) { printf("Atlas INSTALL needs a name.\n"); return RETURN_ERROR; }
     if (!load(0)) return RETURN_ERROR;
-    if (arg(A_TO)) snprintf(parent, sizeof parent, "%s", arg(A_TO));
-    else default_drawer(parent, (int)sizeof parent);
     for (i = 0; names()[i]; i++) {
         Port *p = find(names()[i], 0);
         if (!p) { bad++; continue; }
+        if (arg(A_TO)) snprintf(parent, sizeof parent, "%s", arg(A_TO));
+        else default_drawer(p, parent, (int)sizeof parent);     /* each to its own drawer of the Games drive */
         if (installed_version(p) && !updatable(p)) { printf("%s %s is installed already.\n", p->title, installed_version(p)); continue; }
         if (!install_one(p, parent)) bad++;
         if (stopped()) { printf("***Break\n"); return RETURN_WARN; }

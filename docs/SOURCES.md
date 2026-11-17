@@ -94,7 +94,7 @@ the window:
 | `Atlas LIST [ALL\|AVAILABLE\|INSTALLED\|UPDATES] [FROM=id]` | what there is (AVAILABLE when none is given) |
 | `Atlas SEARCH words` | entries with every word in their name, line or id |
 | `Atlas SHOW name` | what the sources say about one |
-| `Atlas INSTALL names [TO=drawer] [YES]` | installs, into `ENV:AmiPortAtlas/Drawer` or Work:Games when TO isn't given |
+| `Atlas INSTALL names [TO=drawer] [YES]` | installs, into `ENV:AmiPortAtlas/Drawer`, else the game's drawer on the Games drive (`Games:Ports` for a port), else Work:Games, when TO isn't given |
 | `Atlas UPGRADE [names] [YES]` | installs every update, or those named, where each game is |
 | `Atlas REMOVE names [YES]` | deletes what AmiPortAtlas installed |
 | `Atlas SOURCES` | the sources, on and off, and what each gave |

@@ -29,6 +29,7 @@
 #include "install.h"
 #include "repo.h"
 #include "ui.h"
+#include "gamesfolders.h"
 #ifdef AP_HAVE_SQLITE
 #include "gamesindex.h"
 #endif
@@ -36,7 +37,7 @@
 #define CACHE      "PROGDIR:Cache"
 #define PICTURES   CACHE "/Pictures"   /* kept until the Atlas stops naming them */
 
-static const char vers[] = "$VER: AmiPortAtlas 0.2.1 (06.11.2026) The AmiCradle Team";
+static const char vers[] = "$VER: AmiPortAtlas 0.3.0 (17.11.2026) The AmiCradle Team";
 
 static struct {
     struct Window *win;
@@ -401,6 +402,18 @@ static int own_drawer(const char *name)
     return *name == *own;
 }
 
+static int games_drive_there(void)
+{
+    struct Process *me = (struct Process *)FindTask(NULL);
+    APTR win = me->pr_WindowPtr;
+    BPTR l;
+    me->pr_WindowPtr = (APTR)-1;        /* no "insert volume" requester */
+    l = Lock((STRPTR)GAMES_DRIVE, ACCESS_READ);
+    me->pr_WindowPtr = win;
+    if (l) UnLock(l);
+    return l != 0;
+}
+
 static void find_drawers(void)
 {
     static char found[24][32];
@@ -545,10 +558,18 @@ static void step(void *user, int s, long done, long total)
     status(line);
 }
 
-static void default_drawer(char *out, int max)
+/* Where p is offered: the drawer the player chose last; else, on a machine
+ * with the Games drive, the game's drawer there (Games:Ports for a port),
+ * made when the drive has none; else as before the Games drive. */
+static void default_drawer(const Port *p, char *out, int max)
 {
     BPTR l;
     if (GetVar((STRPTR)"AmiPortAtlas/Drawer", (STRPTR)out, max, GVF_GLOBAL_ONLY) > 0) return;
+    if (games_drive_there() && games_install_drawer(p, GAMES_DRIVE, out, max)) {
+        l = Lock((STRPTR)out, ACCESS_READ);
+        if (!l) l = CreateDir((STRPTR)out);
+        if (l) { UnLock(l); return; }
+    }
     l = Lock((STRPTR)"Work:Games", ACCESS_READ);
     if (l) { UnLock(l); snprintf(out, (size_t)max, "Work:Games"); return; }
     l = Lock((STRPTR)"Work:", ACCESS_READ);
@@ -588,7 +609,7 @@ static void host_install(void *data, Port *p)
                  "Its installer runs on this Amiga. Install it only if you trust %s.", p->title, from->name, from->name);
         if (ask(text, "Go on|Cancel") != 1) return;
     }
-    default_drawer(drawer, (int)sizeof drawer);
+    default_drawer(p, drawer, (int)sizeof drawer);
     for (;;) {
         if (!install_check(p, drawer, why, (int)sizeof why)) { ask(why, "OK"); return; }
         snprintf(text, sizeof text, "Install %s %s into %s?\n\nThis Amiga has what it needs:\nthe CPU, the modules and the room.",

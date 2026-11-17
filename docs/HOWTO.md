@@ -5,7 +5,7 @@
 You need AmigaOS 3.2 or later (or GFOS), a 68040 or better and a TCP/IP
 stack (bsdsocket.library).
 
-1. Unpack `AmiPortAtlas-0.2.1.lha` with LhA or OpenCompress, e.g. into RAM:.
+1. Unpack `AmiPortAtlas-0.3.0.lha` with LhA or OpenCompress, e.g. into RAM:.
 2. Copy the `AmiPortAtlas` drawer anywhere, for example to `Work:`.
 3. Copy `C/Atlas` to `C:`, for the Shell command.
 4. Copy `Libs/gfopentls.library` to `LIBS:`.
@@ -55,7 +55,7 @@ UPDATE.
     Atlas UPDATE                     read every source again, count the updates
     Atlas SEARCH tyrian              find entries
     Atlas SHOW opentyrian            what the sources say about one
-    Atlas INSTALL opentyrian         install it (to Work:Games, or TO=drawer)
+    Atlas INSTALL opentyrian         install it (to Games:Ports, or TO=drawer)
     Atlas LIST UPDATES               what has an update
     Atlas UPGRADE YES                install every update, no questions
     Atlas LIST INSTALLED FROM=amicradle
