@@ -87,6 +87,8 @@ static void test_folders(void)
     CHECK(games_folder_of_source("whdload") == GF_WHDLOAD && games_folder_of_source("whdload-pimiga") == GF_WHDLOAD);
     CHECK(games_folder_of_source("os4depot") == GF_NONE && games_folder_of_source("mygames") == GF_NONE);
     CHECK(games_folder_of_source(NULL) == GF_NONE);
+    CHECK(games_shelf_drawer("A") && games_shelf_drawer("#") && games_shelf_drawer("0-9"));
+    CHECK(!games_shelf_drawer("AB") && !games_shelf_drawer("") && !games_shelf_drawer(NULL) && !games_shelf_drawer("0-99"));
     memset(&p, 0, sizeof p);
     CHECK(games_folder_of(&p) == GF_PORTS);                 /* no source: the Atlas's own */
     p.source = "aminet-game";  CHECK(games_folder_of(&p) == GF_AMINET);
