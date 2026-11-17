@@ -399,8 +399,8 @@ static void select_port(Port *p)
         int i;
         for (i = 0; i < 13; i++) fact(ids[i], NULL);
     }
-    set_text("install", p && is_update(p) ? "Update..." : inst ? "Play" : "Install...");
-    olui_set_disabled(U, el("install"), !(p && (inst || port_installable(p))));
+    set_text("install", p && is_update(p) ? "Update..." : inst ? "Play" : p && port_link_only(p) ? "Get it..." : "Install...");
+    olui_set_disabled(U, el("install"), !(p && (inst || port_installable(p) || port_link_only(p))));
     olui_set_disabled(U, el("remove"), !inst);
     olui_set_disabled(U, el("release"), !(p && (p->release_url || p->port_repo)));
     show_shot(same ? shot : 0);
@@ -554,6 +554,7 @@ static void on_button(olui *ui, const olui_event *ev, void *d)
     else if (!sel) return;
     else if (strcmp(ev->id, "install") == 0) {
         if (installed(sel) && !is_update(sel)) { if (H->launch) H->launch(H->data, sel); }
+        else if (port_link_only(sel)) { if (H->open_url) H->open_url(H->data, sel->release_url); }
         else if (H->install) H->install(H->data, sel);
     }
     else if (strcmp(ev->id, "release") == 0) {

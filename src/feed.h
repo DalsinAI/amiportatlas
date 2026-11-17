@@ -67,6 +67,9 @@ void  port_free(Port *p);
 /* A port can be installed when the feed gives a download for it, and its id,
  * drawer and program are plain names (no ':' or '/', not empty). */
 int   port_installable(const Port *p);
+/* Listed by another source with only its page (Aminet, WHDLoad: Dale 17 Nov, list and link, install later):
+ * Install says Get it... and opens the page. */
+int   port_link_only(const Port *p);
 int   port_plain_name(const char *s);
 
 /* A picture's file name in the cache: 16 hex digits of its URL's SHA-256 and

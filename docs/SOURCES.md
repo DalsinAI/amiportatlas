@@ -147,11 +147,28 @@ anonymous uploads.
 Joining the master list is a request to the Team: a pull request adding
 the source to `data/sources.json`.
 
+## Aminet and WHDLoad: listed with their pages
+
+Dale's choice (17 November 2026): list and link, install later.
+`tools/sources_index.py` turns Aminet's whole index (`https://aminet.net/INDEX.gz`)
+and WHDLoad's table of installs (`https://www.whdload.de/games/all.html`) into
+`data/aminet-game.json` and `data/whdload.json`, which the master list names.
+Their entries carry the page (`release_url`) and no download, so the window's
+**Install...** says **Get it...** and opens the page, and fire in full screen does
+the same. Aminet's game drawers come without data, hints, patches and editors,
+and without builds for other systems. A WHDLoad install runs the player's own
+copy of the game. Run it off the Amiga to refresh them:
+
+    curl -o INDEX.gz https://aminet.net/INDEX.gz
+    curl -o all.html https://www.whdload.de/games/all.html
+    python3 tools/sources_index.py aminet INDEX.gz data/aminet-game.json
+    python3 tools/sources_index.py whdload all.html data/whdload.json
+
 ## Still to do
 
-1. Readers for Aminet, OS4Depot, MorphOS-Storage and AROS Archives, each
-   turning the site's listing into an index the master list then names.
-   They run off the Amiga and publish next to the Port Atlas.
+1. Readers for OS4Depot, MorphOS-Storage and AROS Archives, each turning
+   the site's listing into an index the master list then names. Aminet's
+   games and WHDLoad's installs have theirs (below).
 2. Installs for other systems: an OS4Depot or MorphOS-Storage entry is
    listed and opens its page, and installs once AmiPortAtlas is built
    there and knows its systems.
