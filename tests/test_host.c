@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../src/feed.h"
+#include "../src/gamesfolders.h"
 #include "../src/sha256.h"
 #include "../src/match.h"
 #include "../src/sources.h"
@@ -460,8 +461,30 @@ static void test_index(void)
     feed_utf8 = 0;
 }
 
+static void test_pick_start(void)
+{
+    static const char *const wh[] = { "ReadMe", "Lemmings", "Lemmings.guide" };
+    static const int wht[] = { 0, 0, 0 };
+    static const char *const two[] = { "Install", "ReadMe", "Gods", "GodsEditor" };
+    static const int twot[] = { 1, 0, 1, 1 };
+    static const char *const one[] = { "Install-Foo", "Play" };
+    static const int onet[] = { 1, 1 };
+    static const char *const only[] = { "Uninstall" };
+    static const int onlyt[] = { 1 };
+    static const char *const docs[] = { "ReadMe", "Manual.txt" };
+    static const int docst[] = { 0, 0 };
+    CHECK(games_pick_start("Lemmings", wh, wht, 3) == 1);           /* a WHDLoad drawer: the slave's project icon */
+    CHECK(games_pick_start("gods", two, twot, 4) == 2);             /* a program named as the drawer, case aside */
+    CHECK(games_pick_start("The Gods", two, twot, 4) == 2);         /* else the first program that isn't an installer */
+    CHECK(games_pick_start("Foo", one, onet, 2) == 1);
+    CHECK(games_pick_start("Foo", only, onlyt, 1) == 0);            /* the only program, whatever its name */
+    CHECK(games_pick_start("Foo", docs, docst, 2) == -1);           /* only papers: the drawer opens instead */
+    CHECK(games_pick_start("Foo", NULL, NULL, 0) == -1);
+}
+
 int main(int argc, char **argv)
 {
+    test_pick_start();
     test_sha256();
     test_feed_small();
     test_feed_bad();

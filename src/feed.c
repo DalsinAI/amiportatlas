@@ -97,7 +97,7 @@ void port_free(Port *p)
     free(p->fit); free(p->game_data); free(p->version); free(p->release_url);
     free(p->port_repo); free(p->download_url); free(p->download_sha256);
     free(p->drawer); free(p->program); free(p->cpu);
-    free(p->source); free(p->kind); free(p->summary); free(p->author); free(p->category); free(p->install);
+    free(p->source); free(p->kind); free(p->summary); free(p->author); free(p->category); free(p->install); free(p->disk_path);
     json_free_list(p->requires, p->nrequires);
     json_free_list(p->modules, p->nmodules);
     json_free_list(p->shots, p->nshots);

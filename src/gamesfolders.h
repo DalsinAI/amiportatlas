@@ -46,6 +46,14 @@ const char *games_drawer_of(const Port *p);
  * before. */
 int games_install_drawer(const Port *p, const char *drive, char *out, int max);
 
+/* Starting a game found on the drive: which icon in its drawer to open.
+ * names[i] is an icon's name without ".info", tool[i] 1 for a program's
+ * icon (WBTOOL), 0 for a project's (a WHDLoad slave's, say). First a
+ * program named as the drawer, then a project named so, then the only
+ * program, then the first program and then the first project that isn't a
+ * read-me, an installer or the like. -1: none (open the drawer instead). */
+int games_pick_start(const char *drawer, const char *const *names, const int *tool, int n);
+
 /* A drawer that only sorts the games under it, as big sets have ("A", "B",
  * "0-9", "#"): a name of one character, or "0-9". Its drawers are the
  * games; it is not one itself. */
