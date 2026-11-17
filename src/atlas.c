@@ -43,7 +43,7 @@
 #include "gamesindex.h"
 #endif
 
-const char atlas_version[] __attribute__((used)) = "$VER: Atlas 0.2.1 (06.11.2026) The AmiCradle Team";
+const char atlas_version[] __attribute__((used)) = "$VER: Atlas 0.3.0 (17.11.2026) The AmiCradle Team";
 #if !defined(__amigaos4__) && !defined(__AROS__)
 unsigned long __stack = 65536;   /* libnix swaps to this from the Shell's 4 KB */
 #endif
