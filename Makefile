@@ -39,8 +39,9 @@ OLUI_HOST = $(OLUI)/src/openlayout.c $(OLUI)/src/gfcss_parse.c $(OLUI)/src/gfcss
 .PHONY: all test test-games render os3 clean
 all: test
 
-test: $(OUT)/test_host $(OUT)/ui_host test-games
+test: $(OUT)/test_host $(OUT)/ui_host $(OUT)/test_cx test-games
 	$(OUT)/test_host $(FEED)
+	$(OUT)/test_cx
 	$(OUT)/ui_host $(FEED) $(THEME) $(OUT)/window-ops.txt
 
 render: test
@@ -49,6 +50,10 @@ render: test
 $(OUT)/test_host: tests/test_host.c $(COMMON) src/*.h
 	@mkdir -p $(OUT)
 	$(HOSTCC) -std=c99 $(CWARN) -O1 -g -o $@ tests/test_host.c $(COMMON)
+
+$(OUT)/test_cx: tests/test_cx.c src/cxcmd.h
+	@mkdir -p $(OUT)
+	$(HOSTCC) -std=c99 $(CWARN) -O1 -g -o $@ tests/test_cx.c
 
 # The games index (src/gamesdb.c) is not yet in the Amiga programs: it joins them with DalsinAI/gfopensqlite.
 test-games: $(OUT)/test_gamesdb
