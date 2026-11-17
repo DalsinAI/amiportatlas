@@ -366,7 +366,8 @@ static void select_port(Port *p)
     set_text("gname", p ? p->title : "AmiPortAtlas");
     inst = p ? installed(p) : NULL;
     if (p) {
-        if (p->version && state_is(p, "released")) snprintf(line, sizeof line, "%s", p->version);
+        if (port_on_disk_only(p)) snprintf(line, sizeof line, "On the Games drive, in no source's list");
+        else if (p->version && state_is(p, "released")) snprintf(line, sizeof line, "%s", p->version);
         else snprintf(line, sizeof line, "Not released yet (%s)", port_state_text(p));
         fact("version", line);
         fact("installed", inst);
@@ -449,6 +450,7 @@ static void on_section(olui *ui, const olui_event *ev, void *d)
     (void)d;
     section = olui_tabs_current(olui_find(ui, ev->id));
     fill();
+    ui_select_row(nshown ? 0 : -1);     /* the facts follow the list */
 }
 
 static void sec_add(char list[][SEC_NAME], int *n, const char *name)

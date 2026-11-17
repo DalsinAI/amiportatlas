@@ -261,12 +261,14 @@ int main(int argc, char **argv)
         {
             olui_rect at;
             tabs = olui_find(ui, "sections");
-            ui_set_section(2);
+            ui_set_section(6);                              /* Exclusive: one of our own is shown */
+            CHECK(ui_selected() && port_is_original(ui_selected()));
             CHECK(olui_layout(ui, w, h));
             CHECK(olui_box(ui, tabs, &at));
             olui_mouse(ui, (int)at.x + 12, (int)at.y + 8, OLUI_MOUSE_DOWN);
             olui_mouse(ui, (int)at.x + 12, (int)at.y + 8, OLUI_MOUSE_UP);
             CHECK(ui_section() == 0 && ui_rows() == all);
+            CHECK(ui_selected() && ui_selected()->number == 1);   /* the facts follow: the first of All */
         }
         if (argc > 6 && atoi(argv[6]) == 0) ui_set_drawers(NULL, 0);   /* the picture: 0 no Games drive, else that section */
         else if (argc > 6) ui_set_section(atoi(argv[6]));
