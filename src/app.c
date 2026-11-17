@@ -17,7 +17,12 @@
 #include <datatypes/datatypes.h>
 #include <datatypes/pictureclass.h>
 #include <libraries/asl.h>
+#include <libraries/commodities.h>
+#include <workbench/startup.h>
+#include <workbench/workbench.h>
 #include <proto/intuition.h>
+#include <proto/commodities.h>
+#include <proto/icon.h>
 #include <proto/graphics.h>
 #include <proto/datatypes.h>
 #include <proto/asl.h>
@@ -30,6 +35,7 @@
 #include "repo.h"
 #include "ui.h"
 #include "gamesfolders.h"
+#include "cxcmd.h"
 #ifdef AP_HAVE_SQLITE
 #include "gamesindex.h"
 #endif
@@ -56,6 +62,8 @@ static struct {
     char failed[8][200];         /* pictures that didn't come: not asked for again until a refresh */
     int nfailed;
     int offline;                 /* no network for pictures: none fetched until a refresh */
+    WORD box[4];                 /* where the window was, for the next time it opens */
+    int loaded;                  /* the sources and the index read: the first time the window opens */
 } A;
 
 static void drop_old_pictures(void);
@@ -126,8 +134,10 @@ static void scale_to(int w, int h)
 /* olui_amiga_own: the picture box, drawn by us in the window's pixels. */
 static void draw_shot(void *data, const olui_el *el, int x, int y, int w, int h)
 {
-    struct RastPort *rp = A.win->RPort;
+    struct RastPort *rp;
     (void)data; (void)el;
+    if (!A.win) return;
+    rp = A.win->RPort;
     scale_to(w, h);
     SetAPen(rp, 1);
     RectFill(rp, x, y, x + w - 1, y + h - 1);
@@ -143,7 +153,7 @@ static void redraw_shot(void)
 {
     olui_rect r;
     olui_el *shot = olui_find(A.ui, "shot");
-    if (shot && olui_box(A.ui, shot, &r))
+    if (A.win && shot && olui_box(A.ui, shot, &r))
         draw_shot(NULL, shot, A.win->BorderLeft + r.x, A.win->BorderTop + r.y, r.w, r.h);
 }
 
@@ -225,9 +235,9 @@ static void free_pens(void)
 
 static void busy(int on)
 {
-    SetWindowPointer(A.win, WA_BusyPointer, on ? TRUE : FALSE, TAG_DONE);
+    if (A.win) SetWindowPointer(A.win, WA_BusyPointer, on ? TRUE : FALSE, TAG_DONE);
     ui_busy(on);
-    olui_amiga_draw(A.glue);
+    if (A.glue) olui_amiga_draw(A.glue);
 }
 
 static LONG ask(const char *text, const char *buttons)
@@ -244,7 +254,7 @@ static LONG ask(const char *text, const char *buttons)
 static void status(const char *text)
 {
     ui_status(text);
-    olui_amiga_draw(A.glue);
+    if (A.glue) olui_amiga_draw(A.glue);
 }
 
 /* ---- the feed ---- */
@@ -542,7 +552,7 @@ static int progress(void *user, const char *d, long len, long done, long total)
     (void)user; (void)d; (void)len;
     if (total > 0) {
         ui_progress((int)(done / (total / 100 + 1)));
-        olui_amiga_draw(A.glue);
+        if (A.glue) olui_amiga_draw(A.glue);
     }
     return 1;
 }
@@ -707,31 +717,155 @@ static void host_remove(void *data, Port *p)
 
 static void host_open_url(void *data, const char *url) { (void)data; platform_open_url(url); }
 
+/* ---- the window: opened and closed as Exchange and the systray ask; the program stays ---- */
+
+static void load_once(void)
+{
+    if (A.loaded) return;
+    A.loaded = 1;
+    share_cache();
+    installed_load();
+    find_drawers();
+    read_sources(0);            /* the saved copies show at once */
+    if (!all_fresh()) read_sources(1);
+    {
+        /* the first start looks for games already installed */
+        char seen[4];
+        if (GetVar((STRPTR)"AmiPortAtlas/Scanned", (STRPTR)seen, sizeof seen, GVF_GLOBAL_ONLY) < 0) host_scan(NULL);
+    }
+}
+
+static void hide_window(void)
+{
+    if (!A.win) return;
+    drop_picture();             /* its pens are the screen's */
+    if (A.glue) olui_amiga_free(A.glue);
+    A.glue = NULL;
+    free_pens();
+    { int i; for (i = 0; i <= MARK_ORIGINAL; i++) A.pens[i] = -1; }
+    A.box[0] = A.win->LeftEdge; A.box[1] = A.win->TopEdge; A.box[2] = A.win->Width; A.box[3] = A.win->Height;
+    CloseWindow(A.win);
+    A.win = NULL;
+}
+
+static int show_window(void)
+{
+    if (A.win) {                /* open already: to the front */
+        ScreenToFront(A.win->WScreen);
+        WindowToFront(A.win);
+        ActivateWindow(A.win);
+        return 1;
+    }
+    A.win = OpenWindowTags(NULL, WA_Title, (ULONG)"AmiPortAtlas", WA_ScreenTitle, (ULONG)(vers + 6),
+                           A.box[2] ? WA_Left : TAG_IGNORE, (ULONG)A.box[0], A.box[2] ? WA_Top : TAG_IGNORE, (ULONG)A.box[1],
+                           WA_Width, A.box[2] ? (ULONG)A.box[2] : 1100, WA_Height, A.box[3] ? (ULONG)A.box[3] : 680,
+                           WA_MinWidth, 760, WA_MinHeight, 460,
+                           WA_MaxWidth, ~0UL, WA_MaxHeight, ~0UL, WA_AutoAdjust, TRUE,
+                           WA_DragBar, TRUE, WA_DepthGadget, TRUE, WA_CloseGadget, TRUE, WA_SizeGadget, TRUE,
+                           WA_Activate, TRUE, WA_SimpleRefresh, TRUE, WA_ReportMouse, TRUE,
+                           WA_IDCMP, olui_amiga_idcmp(), TAG_DONE);
+    if (!A.win) return 0;
+    if (!(A.glue = olui_amiga_new(A.ui, A.win))) { CloseWindow(A.win); A.win = NULL; return 0; }
+    olui_amiga_theme(A.glue, NULL);  /* the theme GFOpenPrefs Look chose */
+    get_pens();
+    olui_amiga_own(A.glue, olui_find(A.ui, "shot"), draw_shot, NULL);
+    olui_amiga_images(A.glue, draw_mark, NULL);
+    olui_amiga_layout(A.glue);
+    olui_amiga_draw(A.glue);
+    load_once();
+    return 1;
+}
+
+/* ---- the commodity: in the systray with the others while it runs ---- */
+
+/* commodities.library's command to cxcmd.h's */
+static long cx_command(ULONG id)
+{
+    switch (id) {
+    case CXCMD_DISABLE:   return APCX_DISABLE;
+    case CXCMD_ENABLE:    return APCX_ENABLE;
+    case CXCMD_APPEAR:    return APCX_APPEAR;
+    case CXCMD_DISAPPEAR: return APCX_DISAPPEAR;
+    case CXCMD_KILL:      return APCX_KILL;
+    case CXCMD_UNIQUE:    return APCX_UNIQUE;
+    }
+    return 0;
+}
+
+#ifdef __amigaos4__
+struct CommoditiesIFace *ICommodities;
+#endif
+struct Library *CxBase;
+#define CX_ID_POP 1
+
+static struct NewBroker nb = {
+    NB_VERSION, (STRPTR)"AmiPortAtlas", (STRPTR)"AmiPortAtlas 0.3.0", (STRPTR)"Games: every game, where to get it, and play",
+    NBU_UNIQUE | NBU_NOTIFY, COF_SHOW_HIDE, 0, NULL, 0
+};
+
+/* the tool types: the icon's (WBStartup's copy too) from Workbench, KEY=VALUE words from the Shell */
+static void read_options(apcx_opts *o, int argc, char **argv)
+{
+    int i;
+    apcx_defaults(o);
+    if (argc == 0 && argv) {
+        struct WBStartup *wb = (struct WBStartup *)argv;
+        struct DiskObject *dob;
+        BPTR old;
+        if (wb->sm_NumArgs < 1) return;
+        old = CurrentDir(wb->sm_ArgList[0].wa_Lock);
+        if ((dob = GetDiskObject((STRPTR)wb->sm_ArgList[0].wa_Name))) {
+            STRPTR *tt = (STRPTR *)dob->do_ToolTypes;
+            for (; tt && *tt; tt++) apcx_word(o, (const char *)*tt);
+            FreeDiskObject(dob);
+        }
+        CurrentDir(old);
+        return;
+    }
+    for (i = 1; i < argc; i++) apcx_word(o, argv[i]);
+}
+
 /* ---- the program ---- */
 
-int main(void)
+int main(int argc, char **argv)
 {
     const char *missing = NULL;
     char err[200];
-    int done = 0, rc = 20;
+    int done = 0, rc = 20, disabled = 0;
     UiHost host;
+    apcx_opts opts;
+    struct MsgPort *cxport = NULL;
+    CxObj *broker = NULL;
 
     memset(&A, 0, sizeof A);
     { int i; for (i = 0; i <= MARK_ORIGINAL; i++) A.pens[i] = -1; }
     feed_utf8 = 1;  /* olui takes UTF-8 */
     if (!platform_open(&missing)) { printf("AmiPortAtlas needs %s.\n", missing); goto out; }
-    A.win = OpenWindowTags(NULL, WA_Title, (ULONG)"AmiPortAtlas", WA_ScreenTitle, (ULONG)(vers + 6),
-                           WA_Width, 1100, WA_Height, 680, WA_MinWidth, 760, WA_MinHeight, 460,
-                           WA_MaxWidth, ~0UL, WA_MaxHeight, ~0UL, WA_AutoAdjust, TRUE,
-                           WA_DragBar, TRUE, WA_DepthGadget, TRUE, WA_CloseGadget, TRUE, WA_SizeGadget, TRUE,
-                           WA_Activate, TRUE, WA_SimpleRefresh, TRUE, WA_ReportMouse, TRUE,
-                           WA_IDCMP, olui_amiga_idcmp(), TAG_DONE);
-    if (!A.win) { printf("AmiPortAtlas could not open its window.\n"); goto out; }
-    A.ui = olui_new();
-    A.glue = A.ui ? olui_amiga_new(A.ui, A.win) : NULL;
-    if (!A.glue) { printf("AmiPortAtlas: out of memory.\n"); goto out; }
-    olui_amiga_theme(A.glue, NULL);  /* the theme GFOpenPrefs Look chose */
+    read_options(&opts, argc, argv);
 
+    /* A commodity when commodities.library is there: the systray lists it, its close gadget only hides the window,
+     * Exchange's Remove (or Ctrl-C) ends it. A second start shows the first one's window and ends. */
+    if ((CxBase = OpenLibrary((STRPTR)"commodities.library", 37))) {
+#ifdef __amigaos4__
+        ICommodities = (struct CommoditiesIFace *)GetInterface(CxBase, "main", 1, NULL);
+#endif
+        if ((cxport = CreateMsgPort())) {
+            LONG why = 0;
+            nb.nb_Port = cxport;
+            nb.nb_Pri = (BYTE)opts.pri;
+            broker = CxBroker(&nb, &why);
+            if (!broker && why == CBERR_DUP) { rc = 0; goto out; }   /* the one running was told (NBU_NOTIFY) */
+            if (broker && opts.popkey[0]) {
+                CxObj *key = HotKey((STRPTR)opts.popkey, cxport, CX_ID_POP);
+                if (key) AttachCxObj(broker, key);
+                if (CxObjError(broker)) printf("AmiPortAtlas: the hot key \"%s\" was not taken.\n", opts.popkey);
+            }
+            if (broker) ActivateCxObj(broker, 1);
+        }
+    }
+
+    A.ui = olui_new();
+    if (!A.ui) { printf("AmiPortAtlas: out of memory.\n"); goto out; }
     memset(&host, 0, sizeof host);
     host.installed = host_installed;
     host.picture = host_picture;
@@ -744,41 +878,50 @@ int main(void)
     host.source_name = host_source_name;
     host.is_new = host_is_new;
     if (!ui_build(A.ui, &host, err, sizeof err)) { printf("AmiPortAtlas: %s\n", err); goto out; }
-    get_pens();
-    olui_amiga_own(A.glue, olui_find(A.ui, "shot"), draw_shot, NULL);
-    olui_amiga_images(A.glue, draw_mark, NULL);
-    olui_amiga_layout(A.glue);
 
-    share_cache();
-    installed_load();
-    find_drawers();
-    read_sources(0);            /* the saved copies show at once */
-    if (!all_fresh()) read_sources(1);
-    {
-        /* the first start looks for games already installed */
-        char seen[4];
-        if (GetVar((STRPTR)"AmiPortAtlas/Scanned", (STRPTR)seen, sizeof seen, GVF_GLOBAL_ONLY) < 0) host_scan(NULL);
-    }
+    /* without a broker there is nothing to bring the window back: it always opens, and closing it ends the program */
+    if ((opts.popup || !broker) && !show_window()) { printf("AmiPortAtlas could not open its window.\n"); goto out; }
 
     while (!done) {
         struct IntuiMessage *m;
-        ULONG sig = Wait((1UL << A.win->UserPort->mp_SigBit) | SIGBREAKF_CTRL_C);
+        CxMsg *cm;
+        ULONG sig = Wait((A.win ? 1UL << A.win->UserPort->mp_SigBit : 0) | (cxport ? 1UL << cxport->mp_SigBit : 0) | SIGBREAKF_CTRL_C);
         if (sig & SIGBREAKF_CTRL_C) break;
-        while ((m = (struct IntuiMessage *)GetMsg(A.win->UserPort)) != NULL) {
+        while (A.win && (m = (struct IntuiMessage *)GetMsg(A.win->UserPort)) != NULL) {
             ULONG cls = m->Class;
             int r = olui_amiga_event(A.glue, m);
             ReplyMsg((struct Message *)m);
-            if (r == OLUI_AMIGA_CLOSE) done = 1;
             if (cls == IDCMP_INTUITICKS) ui_tick();
+            if (r == OLUI_AMIGA_CLOSE) {
+                if (broker) hide_window();   /* still in the systray */
+                else done = 1;
+                break;
+            }
         }
-        olui_amiga_draw(A.glue);
+        while (cxport && (cm = (CxMsg *)GetMsg(cxport)) != NULL) {
+            ULONG type = CxMsgType(cm), id = CxMsgID(cm);
+            int act = 0;
+            ReplyMsg((struct Message *)cm);
+            if (type == CXM_IEVENT && id == CX_ID_POP) act = disabled ? 0 : APCX_SHOW;
+            else if (type == CXM_COMMAND) act = apcx_do(cx_command(id), A.win != NULL, disabled);
+            if (act & APCX_OFF) { ActivateCxObj(broker, 0); disabled = 1; }
+            if (act & APCX_ON) { ActivateCxObj(broker, 1); disabled = 0; }
+            if (act & APCX_HIDE) hide_window();
+            if (act & APCX_SHOW) show_window();
+            if (act & APCX_QUIT) done = 1;
+        }
+        if (A.glue) olui_amiga_draw(A.glue);
     }
     rc = 0;
 out:
-    drop_picture();
-    if (A.glue) olui_amiga_free(A.glue);
+    hide_window();
+    if (broker) DeleteCxObjAll(broker);
+    if (cxport) { CxMsg *cm; while ((cm = (CxMsg *)GetMsg(cxport))) ReplyMsg((struct Message *)cm); DeleteMsgPort(cxport); }
+#ifdef __amigaos4__
+    if (ICommodities) DropInterface((struct Interface *)ICommodities);
+#endif
+    if (CxBase) CloseLibrary(CxBase);
     if (A.ui) olui_free(A.ui);
-    if (A.win) { free_pens(); CloseWindow(A.win); }  /* pens never obtained are -1 */
     feed_free(A.feed);
     sources_free(A.sources);
     free(A.from_ids);

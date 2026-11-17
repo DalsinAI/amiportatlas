@@ -28,6 +28,22 @@ your own source over FTP or FTPS, and can send it to Aminet too.
 
 [docs/HOWTO.md](docs/HOWTO.md) shows how to install it and use it.
 
+## In the systray
+
+AmiPortAtlas is a commodity. While it runs it sits in the systray with the
+others: a click there shows or hides its window, and its close gadget only
+hides the window. Exchange's **Remove** ends it; starting it again while it
+runs brings the window back. Its tool types, as every commodity's:
+
+| Tool type | What | Default |
+| --- | --- | --- |
+| `CX_POPUP` | open the window at the start | `YES` (`NO` in WBStartup) |
+| `CX_POPKEY` | the hot key that shows the window; `NONE` for none | `ctrl alt g` |
+| `CX_PRIORITY` | the broker's priority | `0` |
+
+From a Shell: `AmiPortAtlas CX_POPUP=NO`. Without commodities.library it is
+a plain window and closing it ends it.
+
 ## What it needs
 
 | | AmigaOS 3.2.3 / GFOS | AROS | AmigaOS 4.1 |
