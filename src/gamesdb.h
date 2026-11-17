@@ -14,35 +14,11 @@
 
 #include "feed.h"
 #include "sources.h"
+#include "gamesfolders.h"
 
 #define GAMESDB_SCHEMA 2
 #define GAMESDB_DRIVE  "Games:"
 #define GAMESDB_FILE   "Games:Atlas.db"   /* at the top of the Games drive, beside the launcher */
-
-/* The Games drive's drawers, in the order they are shown. */
-enum { GF_NONE = -1, GF_PORTS, GF_WHDLOAD, GF_ITCH, GF_AMINET, GF_EXCLUSIVE, GF_COUNT };
-
-/* "Ports", "WHDLoad", "Itch.io", "Aminet", "Exclusive"; NULL for GF_NONE. */
-const char *games_folder_name(int folder);
-
-/* The drawer with that name, without case; GF_NONE when it is none of them. */
-int games_folder_named(const char *name);
-
-/* Where a source's games go: a source whose id is or starts with "whdload",
- * "itch" or "aminet" has its own drawer, the Port Atlas ("amicradle") is
- * Ports, and any other source has none (GF_NONE): its entries are indexed
- * but belong in no drawer of the Games drive. */
-int games_folder_of_source(const char *source_id);
-
-/* Where an entry goes: one of our own games (origin "original") is
- * Exclusive wherever it is listed; anything that is not a game has no
- * drawer; else its source's. */
-int games_folder_of(const Port *p);
-
-/* A drawer that only sorts the games under it, as big sets have ("A", "B",
- * "0-9", "#"): a name of one character, or "0-9". Its drawers are the
- * games; it is not one itself. */
-int games_shelf_drawer(const char *name);
 
 typedef struct GamesDb GamesDb;
 

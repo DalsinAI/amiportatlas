@@ -14,61 +14,6 @@ struct GamesDb {
     char     today[12];
 };
 
-static const char *const folder_names[GF_COUNT] = { "Ports", "WHDLoad", "Itch.io", "Aminet", "Exclusive" };
-
-const char *games_folder_name(int folder)
-{
-    return folder >= 0 && folder < GF_COUNT ? folder_names[folder] : NULL;
-}
-
-static int same_nocase(const char *a, const char *b)
-{
-    for (; *a && *b; a++, b++)
-        if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) return 0;
-    return *a == *b;
-}
-
-int games_folder_named(const char *name)
-{
-    int i;
-    if (!name) return GF_NONE;
-    for (i = 0; i < GF_COUNT; i++)
-        if (same_nocase(name, folder_names[i])) return i;
-    return GF_NONE;
-}
-
-static int starts(const char *s, const char *with)
-{
-    return strncmp(s, with, strlen(with)) == 0;
-}
-
-int games_folder_of_source(const char *id)
-{
-    if (!id) return GF_NONE;
-    if (starts(id, "whdload")) return GF_WHDLOAD;
-    if (starts(id, "itch")) return GF_ITCH;
-    if (starts(id, "aminet")) return GF_AMINET;
-    if (strcmp(id, ATLAS_SOURCE) == 0) return GF_PORTS;
-    return GF_NONE;
-}
-
-static int is_game(const Port *p)
-{
-    return !p->kind || !*p->kind || strcmp(p->kind, "game") == 0;
-}
-
-int games_folder_of(const Port *p)
-{
-    if (!is_game(p)) return GF_NONE;
-    if (port_is_original(p)) return GF_EXCLUSIVE;
-    return games_folder_of_source(p->source ? p->source : ATLAS_SOURCE);
-}
-
-int games_shelf_drawer(const char *name)
-{
-    return name && ((name[0] && !name[1]) || strcmp(name, "0-9") == 0);
-}
-
 /* The tables. A change here is a new GAMESDB_SCHEMA. */
 static const char schema_sql[] =
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT) WITHOUT ROWID;"
@@ -144,7 +89,7 @@ static int make_tables(GamesDb *db)
     int i;
     if (!run(db, "BEGIN") || !run(db, drop_sql) || !run(db, schema_sql)) goto bad;
     for (i = 0; i < GF_COUNT; i++) {
-        char *q = sqlite3_mprintf("INSERT INTO folders VALUES (%d, %Q)", i, folder_names[i]);
+        char *q = sqlite3_mprintf("INSERT INTO folders VALUES (%d, %Q)", i, games_folder_name(i));
         int ok = q && run(db, q);
         sqlite3_free(q);
         if (!ok) goto bad;
@@ -414,7 +359,7 @@ int gamesdb_put_found(GamesDb *db, int folder, const char *drawer, const char *p
 
     for (i = 0; drawer[i] && i < (int)sizeof low - 1; i++) low[i] = (char)tolower((unsigned char)drawer[i]);
     low[i] = 0;
-    snprintf(id, sizeof id, "disk:%s/%s", folder_names[folder], low);
+    snprintf(id, sizeof id, "disk:%s/%s", games_folder_name(folder), low);
     for (i = 5; id[i] && id[i] != '/'; i++) id[i] = (char)tolower((unsigned char)id[i]);
     if (sqlite3_prepare_v2(db->sql, "INSERT INTO games (id, folder, kind, title, drawer, program, found, path, found_program)"
                            " VALUES (?1, ?2, 'game', ?3, ?3, ?5, 1, ?4, ?5)"

@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "ui.h"
+#include "gamesfolders.h"
 #include "match.h"
 
 #define CYCLE_TICKS 50   /* ui_tick comes every 100 ms: a picture every 5 s */
@@ -55,6 +56,10 @@ static const char markup[] =
 "   </column>"
 "  </fieldset>"
 "  <column id=right>"
+"   <tabs id=sections title='Everything, what is new, or one drawer of the Games drive'>"
+"    <tab title=All></tab><tab title=New></tab><tab title=Ports></tab><tab title=WHDLoad></tab>"
+"    <tab title=Itch.io></tab><tab title=Aminet></tab><tab title=Exclusive></tab>"
+"   </tabs>"
 "   <row id=heads>"
 "    <button class=th id=h0 style='width:44px'>#</button><button class=th id=h1 style='width:176px'>Name</button>"
 "    <button class=th id=h2 style='width:44px'>Year</button><button class=th id=h3 style='width:84px'>State</button>"
@@ -86,6 +91,7 @@ static const char css[] =
 ".fact .k{width:110px;font-weight:bold}"
 ".fact .v{flex:1}"
 "#right{flex:1;gap:6px}"
+"#sections{height:30px}"
 "#heads{gap:0}"
 ".th{border-radius:0;text-align:left;padding:2px 6px}"
 "#list{flex:1}"
@@ -99,6 +105,10 @@ static UiHost *H;
 static Feed *F;
 static Port **shown;
 static int nshown, show_mode, fit_mode, from_mode, sort_key, sort_desc;
+/* The sections above the list: everything, what is new, then the Games
+ * drive's five drawers in their order (gamesfolders.h). */
+enum { SEC_ALL, SEC_NEW, SEC_FOLDER };
+static int section;
 static const char *const *from_ids;
 static int nfrom;
 static char find_text[96];
@@ -164,6 +174,8 @@ static int state_is(const Port *p, const char *s) { return p->state && strcmp(p-
 
 static int passes(const Port *p)
 {
+    if (section == SEC_NEW && !(H->is_new && H->is_new(H->data, p))) return 0;
+    if (section >= SEC_FOLDER && games_folder_of(p) != section - SEC_FOLDER) return 0;
     if (find_text[0] && !contains(p->title, find_text) && !(p->summary && contains(p->summary, find_text))) return 0;
     if (fit_mode && (!p->fit || strcmp(p->fit, fit_name[fit_mode]) != 0)) return 0;
     if (from_mode > 0 && from_mode <= nfrom && !(p->source && strcmp(p->source, from_ids[from_mode - 1]) == 0)) return 0;
@@ -253,6 +265,17 @@ static void fill(void)
 }
 
 void ui_refill(void) { fill(); ui_select_row(-2); }
+
+void ui_set_section(int n)
+{
+    if (n < 0 || n >= SEC_FOLDER + GF_COUNT) return;
+    section = n;
+    olui_tabs_select(U, el("sections"), n);
+    fill();
+    ui_select_row(nshown ? 0 : -1);
+}
+
+int ui_section(void) { return section; }
 
 /* ---- the selected game ---- */
 
@@ -379,6 +402,13 @@ static void on_choice(olui *ui, const olui_event *ev, void *d)
     fill();
 }
 
+static void on_section(olui *ui, const olui_event *ev, void *d)
+{
+    (void)d;
+    section = olui_tabs_current(olui_find(ui, ev->id));
+    fill();
+}
+
 static void on_heading(olui *ui, const olui_event *ev, void *d)
 {
     int c = ev->id[1] - '0';
@@ -437,6 +467,7 @@ int ui_build(olui *ui, UiHost *host, char *err, size_t errlen)
         snprintf(ids[c], sizeof ids[c], "h%d", c);
         olui_on(ui, ids[c], OLUI_CLICK, on_heading, NULL);
     }
+    olui_on(ui, "sections", OLUI_SELECT, on_section, NULL);
     olui_on(ui, "list", OLUI_SELECT, on_list, NULL);
     olui_on(ui, "list", OLUI_ACTIVATE, on_list, NULL);
     olui_on(ui, "shot", OLUI_ACTIVATE, on_shot, NULL);

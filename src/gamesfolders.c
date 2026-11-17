@@ -1,0 +1,60 @@
+/* AmiPortAtlas: the Games drive's five drawers. MIT, (c) 2026 The AmiCradle Team.
+ * Plain C with no Amiga calls and no SQLite. */
+#include <string.h>
+#include <ctype.h>
+#include "gamesfolders.h"
+
+static const char *const folder_names[GF_COUNT] = { "Ports", "WHDLoad", "Itch.io", "Aminet", "Exclusive" };
+
+const char *games_folder_name(int folder)
+{
+    return folder >= 0 && folder < GF_COUNT ? folder_names[folder] : NULL;
+}
+
+static int same_nocase(const char *a, const char *b)
+{
+    for (; *a && *b; a++, b++)
+        if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) return 0;
+    return *a == *b;
+}
+
+int games_folder_named(const char *name)
+{
+    int i;
+    if (!name) return GF_NONE;
+    for (i = 0; i < GF_COUNT; i++)
+        if (same_nocase(name, folder_names[i])) return i;
+    return GF_NONE;
+}
+
+static int starts(const char *s, const char *with)
+{
+    return strncmp(s, with, strlen(with)) == 0;
+}
+
+int games_folder_of_source(const char *id)
+{
+    if (!id) return GF_NONE;
+    if (starts(id, "whdload")) return GF_WHDLOAD;
+    if (starts(id, "itch")) return GF_ITCH;
+    if (starts(id, "aminet")) return GF_AMINET;
+    if (strcmp(id, ATLAS_SOURCE) == 0) return GF_PORTS;
+    return GF_NONE;
+}
+
+static int is_game(const Port *p)
+{
+    return !p->kind || !*p->kind || strcmp(p->kind, "game") == 0;
+}
+
+int games_folder_of(const Port *p)
+{
+    if (!is_game(p)) return GF_NONE;
+    if (port_is_original(p)) return GF_EXCLUSIVE;
+    return games_folder_of_source(p->source ? p->source : ATLAS_SOURCE);
+}
+
+int games_shelf_drawer(const char *name)
+{
+    return name && ((name[0] && !name[1]) || strcmp(name, "0-9") == 0);
+}

@@ -27,7 +27,7 @@ OUT     ?= build
 HOSTCC  ?= cc
 CC68K   ?= m68k-amigaos-gcc
 
-COMMON  = src/json.c src/feed.c src/sources.c src/index.c src/sha256.c src/match.c
+COMMON  = src/json.c src/feed.c src/sources.c src/index.c src/sha256.c src/match.c src/gamesfolders.c
 NETWORK = src/http.c src/install.c src/platform.c src/repo.c
 AMIGA   = $(COMMON) $(NETWORK) src/ui.c src/app.c
 ATLAS   = $(COMMON) $(NETWORK) src/ftp.c src/atlas.c

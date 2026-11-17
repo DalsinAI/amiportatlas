@@ -68,7 +68,7 @@ STOVE=$STOVE OGT_ROOT=$OGT SPECS=$SPECS OUT=$OUT/olui sh "$OLUI/build-ui-amiga.s
 FLAGS="-m68040 -specs=$SPECS -noixemul -O2 -fno-delete-null-pointer-checks $LATE -fno-common -std=gnu99 \
   -Wall -Wextra -Wno-unused-parameter -Wno-pointer-sign -DAP_HAVE_GFOPENTLS -I$OLUI/include -I$TLS/include"
 S=$HERE/src
-COMMON="$S/json.c $S/feed.c $S/sources.c $S/index.c $S/sha256.c $S/match.c $S/http.c $S/install.c $S/platform.c $S/repo.c"
+COMMON="$S/json.c $S/feed.c $S/sources.c $S/index.c $S/sha256.c $S/match.c $S/gamesfolders.c $S/http.c $S/install.c $S/platform.c $S/repo.c"
 "$CC" $FLAGS -o "$OUT/AmiPortAtlas" $COMMON "$S/ui.c" "$S/app.c" "$OUT/olui/libolui.a" -lamiga
 "$CC" $FLAGS $SQL -o "$OUT/Atlas" $COMMON "$S/ftp.c" "$S/atlas.c" $SQLSRC $SQLLIB -lamiga
 for f in "$OUT/AmiPortAtlas" "$OUT/Atlas"; do

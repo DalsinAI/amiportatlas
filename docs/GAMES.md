@@ -80,6 +80,14 @@ those games (by `drawer`) takes the rows over.
 An entry the sources drop goes from the index, unless it is on this
 machine: then it stays, `listed` 0, until it is removed.
 
+## The window's sections
+
+Above the list is a row of tabs: **All**, **New**, then the five drawers
+in their order. A drawer's tab shows the games that belong in it
+(`src/gamesfolders.c`, the same rule the index uses); New shows what the
+index dates as new or updated. Find, Show, Fit, From and the sorting work
+inside whichever section is shown.
+
 ## Still to do
 
 1. The index built on the Amiga: AmiPortAtlas and Atlas linked with

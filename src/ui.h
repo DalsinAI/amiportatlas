@@ -26,6 +26,7 @@ typedef struct UiHost {
     void (*refresh)(void *data);                              /* Check for updates */
     void (*scan)(void *data);                                 /* Find installed */
     const char *(*source_name)(void *data, const char *id);   /* a source's name, for the facts */
+    int  (*is_new)(void *data, const Port *p);                /* new or updated lately, for the New section; may be NULL */
 } UiHost;
 
 /* Makes the window's contents in ui (after the theme's CSS is added). */
@@ -49,5 +50,10 @@ void ui_tick(void);
 Port *ui_selected(void);
 void  ui_select_row(int row);
 int   ui_rows(void);
+
+/* The section shown above the list: 0 All, 1 New, 2 to 6 the Games drive's
+ * drawers in their order (Ports, WHDLoad, Itch.io, Aminet, Exclusive). */
+void  ui_set_section(int section);
+int   ui_section(void);
 
 #endif

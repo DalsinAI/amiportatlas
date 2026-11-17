@@ -85,6 +85,13 @@ static void draw(void *data, const olui_draw_op *op)
     }
 }
 
+/* The New section's stand-in for the index: Kobo Deluxe and Tiny Tetris are news. */
+static int host_is_new(void *data, const Port *p)
+{
+    (void)data;
+    return strcmp(p->title, "Kobo Deluxe") == 0 || strcmp(p->title, "Tiny Tetris") == 0;
+}
+
 int main(int argc, char **argv)
 {
     char err[200];
@@ -119,6 +126,7 @@ int main(int argc, char **argv)
     host.picture = host_picture;
     host.install = host_install;
     host.launch = host_launch;
+    host.is_new = host_is_new;
     if (!ui_build(ui, &host, err, sizeof err)) { printf("markup: %s\n", err); return 20; }
     CHECK(olui_layout(ui, w, h));
 
@@ -172,6 +180,42 @@ int main(int argc, char **argv)
         }
         CHECK(tiny == ui_rows() - 1);   /* no number: after the Atlas's */
         CHECK(ui_selected() && strcmp(ui_selected()->id, "tiny@aminet-game") == 0);
+        for (i = 0; i < ui_rows(); i++) {
+            ui_select_row(i);
+            if (ui_selected() && strcmp(ui_selected()->title, "Kobo Deluxe") == 0) break;
+        }
+    }
+    /* The sections above the list: All, New, then the Games drive's five drawers. */
+    {
+        int all = ui_rows(), i, n = 0;
+        olui_el *tabs = olui_find(ui, "sections");
+        CHECK(tabs != NULL && olui_tabs_current(tabs) == 0 && ui_section() == 0);
+        ui_set_section(1);                                  /* New */
+        CHECK(ui_rows() == 2 && olui_tabs_current(tabs) == 1);
+        CHECK(ui_selected() && strcmp(ui_selected()->title, "Kobo Deluxe") == 0);
+        ui_set_section(2);                                  /* Ports: the Atlas's ports, not our own games */
+        n = ui_rows();
+        CHECK(n > 0 && n < all);
+        for (i = 0; i < n; i++) { ui_select_row(i); CHECK(ui_selected() && !port_is_original(ui_selected())
+                                                          && strcmp(ui_selected()->source, ATLAS_SOURCE) == 0); }
+        ui_set_section(3); CHECK(ui_rows() == 0 && ui_selected() == NULL);   /* WHDLoad: no source yet */
+        ui_set_section(4); CHECK(ui_rows() == 0);                            /* Itch.io */
+        ui_set_section(5);                                  /* Aminet: Tiny Tetris */
+        CHECK(ui_rows() == 1 && ui_selected() && strcmp(ui_selected()->title, "Tiny Tetris") == 0);
+        ui_set_section(6);                                  /* Exclusive: our own */
+        CHECK(ui_rows() >= 1);
+        for (i = 0; i < ui_rows(); i++) { ui_select_row(i); CHECK(ui_selected() && port_is_original(ui_selected())); }
+        CHECK(n + 1 + ui_rows() == all);                    /* every game is in one drawer */
+        ui_set_section(7); CHECK(ui_section() == 6);        /* no such section */
+        /* a click on a tab does the same */
+        {
+            olui_rect at;
+            CHECK(olui_box(ui, tabs, &at));
+            olui_mouse(ui, (int)at.x + 12, (int)at.y + 8, OLUI_MOUSE_DOWN);
+            olui_mouse(ui, (int)at.x + 12, (int)at.y + 8, OLUI_MOUSE_UP);
+            CHECK(ui_section() == 0 && ui_rows() == all);
+        }
+        ui_set_section(argc > 6 ? atoi(argv[6]) : 0);       /* the picture can show a section */
         for (i = 0; i < ui_rows(); i++) {
             ui_select_row(i);
             if (ui_selected() && strcmp(ui_selected()->title, "Kobo Deluxe") == 0) break;
