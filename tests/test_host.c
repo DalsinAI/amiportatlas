@@ -482,9 +482,28 @@ static void test_pick_start(void)
     CHECK(games_pick_start("Foo", NULL, NULL, 0) == -1);
 }
 
+static void test_link_only(void)
+{
+    Port p;
+    memset(&p, 0, sizeof p);
+    p.release_url = "https://aminet.net/package/game/shoot/Creepy";
+    p.source = "aminet-game";
+    CHECK(port_link_only(&p));                  /* Aminet: Get it... opens its page */
+    p.source = "whdload";
+    CHECK(port_link_only(&p));
+    p.source = ATLAS_SOURCE;
+    CHECK(!port_link_only(&p));                 /* the Atlas's own: greyed until it is out */
+    p.source = DISK_SOURCE;
+    CHECK(!port_link_only(&p));                 /* on the drive: Play */
+    p.source = "aminet-game";
+    p.release_url = NULL;
+    CHECK(!port_link_only(&p));                 /* no page */
+}
+
 int main(int argc, char **argv)
 {
     test_pick_start();
+    test_link_only();
     test_sha256();
     test_feed_small();
     test_feed_bad();

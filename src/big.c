@@ -151,13 +151,14 @@ void big_fill(void)
     else snprintf(line, sizeof line, "%s", p && p->fit ? p->fit : "");
     put("bruns", line);
     put("bby", p ? p->author : "");
-    put("bstate", p ? port_state_text(p) : "");
+    put("bstate", p && !port_on_disk_only(p) ? port_state_text(p) : "");
     if (inst) snprintf(line, sizeof line, "Installed: %s", inst);
     else if (p && port_on_disk_only(p)) snprintf(line, sizeof line, "On the Games drive");
     else if (p && port_installable(p)) snprintf(line, sizeof line, "Not installed: fire installs it");
+    else if (p && port_link_only(p)) snprintf(line, sizeof line, "On its own page: fire opens it");
     else snprintf(line, sizeof line, "%s", p ? "Not out yet" : "");
     put("bwhere", line);
-    put("bfire", inst || (p && port_on_disk_only(p)) ? "Fire: Play" : p && port_installable(p) ? "Fire: Install" : "");
+    put("bfire", inst || (p && port_on_disk_only(p)) ? "Fire: Play" : p && port_installable(p) ? "Fire: Install" : p && port_link_only(p) ? "Fire: Get it" : "");
 }
 
 int big_input(int what)
@@ -173,6 +174,7 @@ int big_input(int what)
         if (!p) break;
         if ((BH && BH->installed && BH->installed(BH->data, p)) || port_on_disk_only(p)) return BIG_PLAY;
         if (port_installable(p)) return BIG_INSTALL;
+        if (port_link_only(p)) return BIG_PAGE;
         break;
     case BIG_BACK:  return BIG_LEAVE;
     }

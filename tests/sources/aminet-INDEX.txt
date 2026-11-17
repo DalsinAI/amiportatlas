@@ -1,0 +1,16 @@
+|
+| Aminet index, created on 17-Nov-2026
+|
+A2KDeck.lha                    biz/dbase  671K 999 DataBase For AMWAY Distributors done In C
+1497.lha                       game/2play 109K 999 Multiplayer Colonization-clone
+bombic.i386-aros.zip           game/2play 9.7M 610 Bomberman clone..
+SuddenDeath.lha                game/actio  50K 999 4 player tron
+FS_DDaunting.lha               game/data   94K 999 Descent: Freespace 1 MOD
+Sploggy.lha                    game/demo  244K 999 Mario bros like platformer demo, playable
+LSD60.lha                      game/hint  584K 999 LSD Docs Disks in amigaguide format
+pig-m68k-amigaos.lha           game/jump  1.2M 933 Retro style platform game.
+FreeFallinFred_OS4.lha         game/misc  917K 999 Remake of the old game Parachute.
+madtvhd.lha                    game/patch   5K 999 HD-Install script for Mad-TV
+freesci_alpha_src-os4.lha      game/role  1.5M 972 FreeSCI source
+Creepy.lha                     game/shoot 314K 999 Arcade game with brilliant graphics
+MineSweeper.lha                game/wb     34K 999 Nice MineSweeper-Game

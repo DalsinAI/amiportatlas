@@ -894,6 +894,9 @@ static void big_do(int what)
     case BIG_MOVED:   break;
     case BIG_PLAY:    if (p) host_launch(NULL, p); break;
     case BIG_INSTALL: if (p) host_install(NULL, p); big_fill(); break;
+    case BIG_PAGE:      /* the browser opens on Workbench: back to the window first */
+        if (p && p->release_url) { hide_window(); show_window(); platform_open_url(p->release_url); }
+        return;
     case BIG_LEAVE:   hide_window(); show_window(); return;
     }
     if (A.glue) olui_amiga_draw(A.glue);

@@ -15,7 +15,7 @@
 
 enum { BIG_NONE, BIG_LEFT, BIG_RIGHT, BIG_UP, BIG_DOWN, BIG_FIRE, BIG_BACK };
 /* what big_input asks of the program */
-enum { BIG_DID_NOTHING, BIG_MOVED, BIG_PLAY, BIG_INSTALL, BIG_LEAVE };
+enum { BIG_DID_NOTHING, BIG_MOVED, BIG_PLAY, BIG_INSTALL, BIG_LEAVE, BIG_PAGE };   /* BIG_PAGE: open its page (port_link_only) */
 
 #define BIG_ROWS 11     /* games in the column at once */
 

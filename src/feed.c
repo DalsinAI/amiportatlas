@@ -281,6 +281,12 @@ int port_installable(const Port *p)
         && port_plain_name(p->id) && port_plain_name(p->drawer) && port_plain_name(p->program);
 }
 
+int port_link_only(const Port *p)
+{
+    return !port_installable(p) && p->release_url && p->release_url[0] && p->source
+        && strcmp(p->source, ATLAS_SOURCE) != 0 && strcmp(p->source, "disk") != 0;
+}
+
 int port_is_original(const Port *p)
 {
     return p->origin && strcmp(p->origin, "original") == 0;
