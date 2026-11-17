@@ -8,6 +8,9 @@
 #include "gamesdb.h"
 #include "index.h"
 
+#define GF_COUNT_TEXT "5"          /* GF_COUNT, for the SQL */
+typedef char gf_count_is_5[GF_COUNT == 5 ? 1 : -1];
+
 struct GamesDb {
     sqlite3 *sql;
     char     err[160];
@@ -340,6 +343,7 @@ int gamesdb_clear_found(GamesDb *db)
 {
     if (!run(db, "BEGIN")) return 0;
     if (run(db, "DELETE FROM games WHERE id LIKE 'disk:%'")
+        && run(db, "DELETE FROM folders WHERE folder >= " GF_COUNT_TEXT)      /* the player's own are found again */
         && run(db, "UPDATE games SET found = 0, found_program = NULL,"
                    " path = CASE WHEN installed_version IS NULL THEN NULL ELSE path END WHERE found = 1")
         && run(db, "DELETE FROM games WHERE listed = 0 AND installed_version IS NULL AND found = 0")
@@ -348,14 +352,57 @@ int gamesdb_clear_found(GamesDb *db)
     return 0;
 }
 
+int gamesdb_folder(GamesDb *db, const char *name)
+{
+    sqlite3_stmt *st;
+    int folder = games_folder_named(name), n;
+    if (folder != GF_NONE) return folder;
+    if (!name || !*name) return -1;
+    if (sqlite3_prepare_v2(db->sql, "SELECT folder FROM folders WHERE name = ?1 COLLATE NOCASE", -1, &st, NULL) != SQLITE_OK) {
+        fail(db);
+        return -1;
+    }
+    bind_text(st, 1, name);
+    n = sqlite3_step(st);
+    if (n == SQLITE_ROW) folder = sqlite3_column_int(st, 0);
+    sqlite3_finalize(st);
+    if (n == SQLITE_ROW) return folder;
+    if (n != SQLITE_DONE) { fail(db); return -1; }
+    if (sqlite3_prepare_v2(db->sql, "INSERT INTO folders SELECT max(folder) + 1, ?1 FROM folders", -1, &st, NULL) != SQLITE_OK) {
+        fail(db);
+        return -1;
+    }
+    bind_text(st, 1, name);
+    n = sqlite3_step(st);
+    sqlite3_finalize(st);
+    if (n != SQLITE_DONE) { fail(db); return -1; }
+    return (int)sqlite3_last_insert_rowid(db->sql);
+}
+
+/* The folder's name as the index has it; 0 when it has no such folder. */
+static int folder_name(GamesDb *db, int folder, char *out, int max)
+{
+    sqlite3_stmt *st;
+    int got = 0;
+    out[0] = 0;
+    if (sqlite3_prepare_v2(db->sql, "SELECT name FROM folders WHERE folder = ?1", -1, &st, NULL) != SQLITE_OK) return fail(db);
+    sqlite3_bind_int(st, 1, folder);
+    if (sqlite3_step(st) == SQLITE_ROW) {
+        snprintf(out, (size_t)max, "%s", (const char *)sqlite3_column_text(st, 0));
+        got = 1;
+    }
+    sqlite3_finalize(st);
+    return got;
+}
+
 int gamesdb_put_found(GamesDb *db, int folder, const char *drawer, const char *path, const char *program)
 {
     sqlite3_stmt *st;
-    char id[160], low[120];
+    char id[200], low[120], in[64];
     int i, n;
-    if (folder < 0 || folder >= GF_COUNT || !drawer || !*drawer || !path) return -1;
+    if (folder < 0 || !drawer || !*drawer || !path || !folder_name(db, folder, in, (int)sizeof in)) return -1;
     if (sqlite3_prepare_v2(db->sql, "UPDATE games SET found = 1, path = ?3, found_program = ?4 WHERE id ="
-                           " (SELECT id FROM games WHERE folder = ?1 AND listed = 1 AND drawer = ?2"
+                           " (SELECT id FROM games WHERE (folder = ?1 OR ?1 >= " GF_COUNT_TEXT ") AND listed = 1 AND drawer = ?2"
                            "  ORDER BY (source = '" ATLAS_SOURCE "') DESC, id LIMIT 1)", -1, &st, NULL) != SQLITE_OK) {
         fail(db);
         return -1;
@@ -371,7 +418,7 @@ int gamesdb_put_found(GamesDb *db, int folder, const char *drawer, const char *p
 
     for (i = 0; drawer[i] && i < (int)sizeof low - 1; i++) low[i] = (char)tolower((unsigned char)drawer[i]);
     low[i] = 0;
-    snprintf(id, sizeof id, "disk:%s/%s", games_folder_name(folder), low);
+    snprintf(id, sizeof id, "disk:%s/%s", in, low);
     for (i = 5; id[i] && id[i] != '/'; i++) id[i] = (char)tolower((unsigned char)id[i]);
     if (sqlite3_prepare_v2(db->sql, "INSERT INTO games (id, folder, kind, title, drawer, program, found, path, found_program)"
                            " VALUES (?1, ?2, 'game', ?3, ?3, ?5, 1, ?4, ?5)"
@@ -389,6 +436,26 @@ int gamesdb_put_found(GamesDb *db, int folder, const char *drawer, const char *p
     sqlite3_finalize(st);
     if (n != SQLITE_DONE) { fail(db); return -1; }
     return 0;
+}
+
+long gamesdb_each_found(GamesDb *db, GamesDbFoundFn fn, void *user)
+{
+    sqlite3_stmt *st;
+    long n = 0;
+    int rc;
+    if (sqlite3_prepare_v2(db->sql, "SELECT g.id, f.name, g.title, g.path FROM games g JOIN folders f ON f.folder = g.folder"
+                           " WHERE g.id LIKE 'disk:%' ORDER BY g.folder, g.title COLLATE NOCASE, g.id", -1, &st, NULL) != SQLITE_OK) {
+        fail(db);
+        return -1;
+    }
+    while ((rc = sqlite3_step(st)) == SQLITE_ROW) {
+        fn(user, (const char *)sqlite3_column_text(st, 0), (const char *)sqlite3_column_text(st, 1),
+           (const char *)sqlite3_column_text(st, 2), (const char *)sqlite3_column_text(st, 3));
+        n++;
+    }
+    sqlite3_finalize(st);
+    if (rc != SQLITE_DONE) { fail(db); return -1; }
+    return n;
 }
 
 long gamesdb_count(GamesDb *db, int folder, int here)

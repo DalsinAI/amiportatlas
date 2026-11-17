@@ -29,6 +29,16 @@ int games_folder_of_source(const char *source_id);
  * drawer; else its source's. */
 int games_folder_of(const Port *p);
 
+/* A game found in a drawer of the Games drive that no source lists: its
+ * source is DISK_SOURCE and its category the name of the drawer at the top
+ * of the drive it is in ("WHDLoad", or one the player made). */
+#define DISK_SOURCE "disk"
+int port_on_disk_only(const Port *p);
+
+/* The name of the drawer at the top of the Games drive an entry is in or
+ * goes to; NULL when it has none. */
+const char *games_drawer_of(const Port *p);
+
 /* A drawer that only sorts the games under it, as big sets have ("A", "B",
  * "0-9", "#"): a name of one character, or "0-9". Its drawers are the
  * games; it is not one itself. */

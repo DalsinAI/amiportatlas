@@ -35,6 +35,14 @@ static char news[8][40];
 static int nnews;
 static void news_fn(void *user, const char *id) { (void)user; if (nnews < 8) snprintf(news[nnews++], 40, "%s", id); }
 
+static char found_text[400];
+static void found_fn(void *user, const char *id, const char *folder, const char *title, const char *path)
+{
+    size_t at = strlen(found_text);
+    (void)user;
+    snprintf(found_text + at, sizeof found_text - at, "%s|%s|%s|%s;", id, folder, title, path);
+}
+
 static Feed *feed(const char *json)
 {
     const char *why = NULL;
@@ -185,7 +193,7 @@ static void test_index(const char *path)
     f = one_list("{ \"schema_version\": 1, \"generated\": \"2026-11-18\", \"ports\": ["
                  " { \"id\": \"kobo\", \"number\": 1, \"title\": \"Kobo Deluxe\", \"state\": \"released\", \"version\": \"0.5.2\","
                  "   \"drawer\": \"KoboDeluxe\", \"screenshots\": [\"https://example.org/k3.png\"] },"
-                 " { \"id\": \"xboing\", \"number\": 5, \"title\": \"XBoing\", \"state\": \"released\" } ] }", NULL, NULL);
+                 " { \"id\": \"xboing\", \"number\": 5, \"title\": \"XBoing\", \"state\": \"released\", \"drawer\": \"XBoing\" } ] }", NULL, NULL);
     CHECK(f != NULL);
     if (!f) return;
     gamesdb_set_today(db, "2026-11-18");
@@ -214,9 +222,28 @@ static void test_index(const char *path)
     CHECK(is("SELECT value FROM meta WHERE key = 'generated'", "2026-11-18"));
     feed_free(f);
 
+    /* A drawer the player made at the top of the drive is a folder too, found each time. */
+    {
+        int own = gamesdb_folder(db, "More Games");
+        CHECK(gamesdb_folder(db, "whdload") == GF_WHDLOAD && own == GF_COUNT && gamesdb_folder(db, "more games") == own);
+        CHECK(gamesdb_folder(db, "Demos") == own + 1 && gamesdb_folder(db, "") == -1);
+        CHECK(gamesdb_put_found(db, own, "Zeewolf", "Games:More Games/Zeewolf", NULL) == 0);
+        CHECK(gamesdb_put_found(db, own, "XBoing", "Games:More Games/XBoing", NULL) == 1);   /* listed for Ports, kept here */
+        CHECK(gamesdb_put_found(db, own + 2, "X", "Games:X/X", NULL) == -1);                 /* no such folder */
+        CHECK(is("SELECT found || '|' || path FROM games WHERE id = 'xboing'", "1|Games:More Games/XBoing"));
+        CHECK(is("SELECT title || '|' || folder FROM games WHERE id = 'disk:more games/zeewolf'", "Zeewolf|5"));
+        found_text[0] = 0;
+        CHECK(gamesdb_each_found(db, found_fn, NULL) == 3);
+        CHECK(strcmp(found_text, "disk:ports/kobo|Ports|Kobo|Games:Ports/Kobo;"
+                                 "disk:whdload/lemmings|WHDLoad|Lemmings|Games:WHDLoad/LEMMINGS;"
+                                 "disk:more games/zeewolf|More Games|Zeewolf|Games:More Games/Zeewolf;") == 0);
+    }
+
     /* The drive looked through again: Canvas Skies was deleted by hand, Lemmings is still there. */
     CHECK(gamesdb_clear_found(db));
     CHECK(is("SELECT count(*) FROM games WHERE id LIKE 'disk:%' OR id = 'canvas-skies'", "0"));
+    CHECK(is("SELECT count(*) || '|' || max(folder) FROM folders", "5|4"));
+    CHECK(is("SELECT found || '|' || (path IS NULL) FROM games WHERE id = 'xboing'", "0|1"));
     CHECK(is("SELECT path FROM games WHERE id = 'kobo'", "Games:Ports/KoboDeluxe"));    /* installed through AmiPortAtlas: stays */
     CHECK(gamesdb_put_found(db, GF_WHDLOAD, "Lemmings", "Games:WHDLoad/Lemmings", NULL) == 0);
     CHECK(gamesdb_put_found(db, GF_PORTS, "kobodeluxe", "Games:Ports/KoboDeluxe", "kobodl") == 1);

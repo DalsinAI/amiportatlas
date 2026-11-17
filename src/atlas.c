@@ -821,6 +821,9 @@ static int cmd_index(void)
     printf(".\n");
     for (i = 0; i < GF_COUNT; i++)
         printf("  %-10s %5ld listed, %5d on this drive\n", games_folder_name(i), r.listed_in[i], r.on_drive[i]);
+    if (r.other_drawers > 0)
+        printf("  %d other drawer%s on this drive, %d in %s\n", r.other_drawers, r.other_drawers == 1 ? "" : "s",
+               r.on_drive_other, r.other_drawers == 1 ? "it" : "them");
     if (r.stopped) { printf("Atlas: stopped; the index is not whole.\n"); return RETURN_WARN; }
     printf("The games index is %s.\n", file);
     return RETURN_OK;

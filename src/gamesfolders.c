@@ -47,8 +47,20 @@ static int is_game(const Port *p)
     return !p->kind || !*p->kind || strcmp(p->kind, "game") == 0;
 }
 
+int port_on_disk_only(const Port *p)
+{
+    return p->source && strcmp(p->source, DISK_SOURCE) == 0;
+}
+
+const char *games_drawer_of(const Port *p)
+{
+    if (port_on_disk_only(p)) return p->category && *p->category ? p->category : NULL;
+    return games_folder_name(games_folder_of(p));
+}
+
 int games_folder_of(const Port *p)
 {
+    if (port_on_disk_only(p)) return games_folder_named(p->category);
     if (!is_game(p)) return GF_NONE;
     if (port_is_original(p)) return GF_EXCLUSIVE;
     return games_folder_of_source(p->source ? p->source : ATLAS_SOURCE);

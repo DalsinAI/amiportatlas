@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "../src/ui.h"
+#include "../src/gamesfolders.h"
 
 static int failures;
 #define CHECK(c) do { if (!(c)) { printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); failures++; } } while (0)
@@ -92,6 +93,13 @@ static int host_is_new(void *data, const Port *p)
     return strcmp(p->title, "Kobo Deluxe") == 0 || strcmp(p->title, "Tiny Tetris") == 0;
 }
 
+static char *dup(const char *t)
+{
+    char *c = (char *)malloc(strlen(t) + 1);
+    if (c) strcpy(c, t);
+    return c;
+}
+
 int main(int argc, char **argv)
 {
     char err[200];
@@ -170,15 +178,30 @@ int main(int argc, char **argv)
         merged = feed_merge(two, ids, 2);
         CHECK(merged != NULL && merged->count == count + 1);
         feed = merged;
+        /* a game on the Games drive that no source lists, as the program adds them from the index */
+        {
+            Port *more = (Port *)realloc(feed->ports, (size_t)(feed->count + 1) * sizeof(Port)), *p;
+            CHECK(more != NULL);
+            if (!more) return 20;
+            feed->ports = more;
+            p = &feed->ports[feed->count++];
+            memset(p, 0, sizeof *p);
+            p->id = dup("disk:more games/zeewolf");
+            p->title = dup("Zeewolf");
+            p->drawer = dup("Zeewolf");
+            p->source = dup(DISK_SOURCE);
+            p->kind = dup("game");
+            p->category = dup("More Games");
+        }
         ui_set_sources(ids, names, 2);
         ui_set_feed(feed);
-        CHECK(ui_rows() == count + 1);
+        CHECK(ui_rows() == count + 2);
         CHECK(ui_selected() && ui_selected()->number == 1);   /* the Atlas's first */
         for (i = 0; i < ui_rows(); i++) {
             ui_select_row(i);
             if (ui_selected() && strcmp(ui_selected()->title, "Tiny Tetris") == 0) { tiny = i; break; }
         }
-        CHECK(tiny == ui_rows() - 1);   /* no number: after the Atlas's */
+        CHECK(tiny == ui_rows() - 2);   /* no number: after the Atlas's */
         CHECK(ui_selected() && strcmp(ui_selected()->id, "tiny@aminet-game") == 0);
         for (i = 0; i < ui_rows(); i++) {
             ui_select_row(i);
@@ -188,7 +211,7 @@ int main(int argc, char **argv)
     /* The sections above the list are found: All, New, then a tab for each drawer with something to show. */
     {
         int all = ui_rows(), i, n = 0;
-        static const char *const on_drive[] = { "whdload", "Ports", "Homebrew", "Itch.io", "homebrew" };
+        static const char *const on_drive[] = { "whdload", "Ports", "More Games", "Itch.io", "more games" };
         olui_el *tabs = olui_find(ui, "sections");
         CHECK(tabs != NULL && olui_tabs_current(tabs) == 0 && ui_section() == 0);
         /* no Games drive: only the drawers the sources have games for */
@@ -204,7 +227,7 @@ int main(int argc, char **argv)
         CHECK(ui_sections() == 8);
         CHECK(strcmp(ui_section_name(2), "Ports") == 0 && strcmp(ui_section_name(3), "WHDLoad") == 0
               && strcmp(ui_section_name(4), "Itch.io") == 0 && strcmp(ui_section_name(5), "Aminet") == 0
-              && strcmp(ui_section_name(6), "Exclusive") == 0 && strcmp(ui_section_name(7), "Homebrew") == 0);
+              && strcmp(ui_section_name(6), "Exclusive") == 0 && strcmp(ui_section_name(7), "More Games") == 0);
         CHECK(ui_section() == 5 && ui_rows() == 1);         /* still on Aminet, which moved along */
         tabs = olui_find(ui, "sections");
         CHECK(tabs != NULL && olui_tabs_current(tabs) == 5);
@@ -220,16 +243,18 @@ int main(int argc, char **argv)
                                                           && strcmp(ui_selected()->source, ATLAS_SOURCE) == 0); }
         ui_set_section(3); CHECK(ui_rows() == 0 && ui_selected() == NULL);   /* WHDLoad: on the drive, no source yet */
         ui_set_section(4); CHECK(ui_rows() == 0);                            /* Itch.io */
-        ui_set_section(7); CHECK(ui_rows() == 0);                            /* Homebrew: a drawer of the player's own */
+        ui_set_section(7);                                  /* More Games: a drawer of the player's own, and what is in it */
+        CHECK(ui_rows() == 1 && ui_selected() && port_on_disk_only(ui_selected())
+              && strcmp(ui_selected()->title, "Zeewolf") == 0 && strcmp(games_drawer_of(ui_selected()), "More Games") == 0);
         ui_set_section(6);                                  /* Exclusive: our own */
         CHECK(ui_rows() >= 1);
         for (i = 0; i < ui_rows(); i++) { ui_select_row(i); CHECK(ui_selected() && port_is_original(ui_selected())); }
-        CHECK(n + 1 + ui_rows() == all);                    /* every game is in one drawer */
+        CHECK(n + 1 + 1 + ui_rows() == all);                /* every game is in one drawer */
         ui_set_section(8); CHECK(ui_section() == 6);        /* no such section */
         /* a drawer that goes while it is shown: back to All */
         ui_set_section(7);
         ui_set_drawers(on_drive, 2);
-        CHECK(ui_sections() == 6 && ui_section() == 0 && ui_rows() == all && ui_find_section("Homebrew") == -1);
+        CHECK(ui_sections() == 6 && ui_section() == 0 && ui_rows() == all && ui_find_section("More Games") == -1);
         ui_set_drawers(on_drive, 5);
         /* a click on a tab does the same */
         {

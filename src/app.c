@@ -345,8 +345,47 @@ static void index_refresh(void)
 }
 
 static int host_is_new(void *data, const Port *p) { (void)data; return games_index_is_news(news_ids, nnews, p->id); }
+
+/* The games on the Games drive that no source lists join the list, after
+ * the index is made from it (so they are never taken for listed ones). */
+struct DiskAdd { Feed *f; int cap; };
+
+static void disk_one(void *user, const char *id, const char *folder, const char *title, const char *path)
+{
+    struct DiskAdd *a = (struct DiskAdd *)user;
+    Feed *f = a->f;
+    Port *p;
+    (void)path;
+    if (!id || !folder || !title) return;
+    if (f->count >= a->cap) {
+        int cap = f->count + 256;
+        Port *more = (Port *)realloc(f->ports, (size_t)cap * sizeof(Port));
+        if (!more) return;
+        f->ports = more;
+        a->cap = cap;
+    }
+    p = &f->ports[f->count];
+    memset(p, 0, sizeof *p);
+    p->id = strdup(id);
+    p->title = strdup(title);
+    p->drawer = strdup(title);
+    p->source = strdup(DISK_SOURCE);
+    p->kind = strdup("game");
+    p->category = strdup(folder);
+    if (!p->id || !p->title || !p->drawer || !p->source || !p->kind || !p->category) { port_free(p); return; }
+    f->count++;
+}
+
+static void disk_games(Feed *f)
+{
+    struct DiskAdd a;
+    a.f = f;
+    a.cap = f->count;       /* the list is grown before the first one goes in */
+    if (games_index_drive(GAMESDB_DRIVE)) games_index_found(GAMESDB_FILE, disk_one, &a);
+}
 #else
 static void index_refresh(void) {}
+static void disk_games(Feed *f) { (void)f; }
 static int host_is_new(void *data, const Port *p) { (void)data; (void)p; return 0; }
 #endif
 
@@ -450,6 +489,7 @@ static void read_sources(int fetch)
         set_sources(s);
         if (fetch && all_fresh()) prune_pictures(f);
         index_refresh();        /* before the list is filled: New asks it */
+        disk_games(f);
         ui_set_feed(f);
         feed_free(old);
         repo_summary(A.sources, line, (int)sizeof line);
