@@ -66,6 +66,19 @@ int games_folder_of(const Port *p)
     return games_folder_of_source(p->source ? p->source : ATLAS_SOURCE);
 }
 
+int games_install_drawer(const Port *p, const char *drive, char *out, int max)
+{
+    const char *name = port_on_disk_only(p) ? NULL : games_folder_name(games_folder_of(p));
+    size_t d = drive ? strlen(drive) : 0, n = name ? strlen(name) : 0;
+    int slash = d && drive[d - 1] != ':' && drive[d - 1] != '/';
+    if (max > 0) out[0] = 0;
+    if (!d || !n || d + (size_t)slash + n + 1 > (size_t)max) return 0;
+    memcpy(out, drive, d);
+    if (slash) out[d++] = '/';
+    memcpy(out + d, name, n + 1);
+    return 1;
+}
+
 int games_shelf_drawer(const char *name)
 {
     return name && ((name[0] && !name[1]) || strcmp(name, "0-9") == 0);

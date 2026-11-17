@@ -99,6 +99,24 @@ static void test_folders(void)
     CHECK(games_folder_of_source("whdload") == GF_WHDLOAD && games_folder_of_source("whdload-pimiga") == GF_WHDLOAD);
     CHECK(games_folder_of_source("os4depot") == GF_NONE && games_folder_of_source("mygames") == GF_NONE);
     CHECK(games_folder_of_source(NULL) == GF_NONE);
+    {   /* where an entry is installed on a machine with the Games drive */
+        char to[40];
+        memset(&p, 0, sizeof p);
+        CHECK(games_install_drawer(&p, "Games:", to, sizeof to) && strcmp(to, "Games:Ports") == 0);
+        CHECK(games_install_drawer(&p, "Work:T3", to, sizeof to) && strcmp(to, "Work:T3/Ports") == 0);
+        p.origin = "original";
+        CHECK(games_install_drawer(&p, "Games:", to, sizeof to) && strcmp(to, "Games:Exclusive") == 0);
+        p.origin = NULL; p.source = "aminet-game";
+        CHECK(games_install_drawer(&p, "Games:", to, sizeof to) && strcmp(to, "Games:Aminet") == 0);
+        CHECK(!games_install_drawer(&p, "Games:", to, 12) && to[0] == 0);          /* no room: nothing */
+        p.kind = "application";
+        CHECK(!games_install_drawer(&p, "Games:", to, sizeof to) && to[0] == 0);   /* not a game: as before */
+        p.kind = NULL; p.source = "os4depot";
+        CHECK(!games_install_drawer(&p, "Games:", to, sizeof to));
+        p.source = DISK_SOURCE; p.category = "Ports";
+        CHECK(!games_install_drawer(&p, "Games:", to, sizeof to));                 /* on the drive already */
+        CHECK(!games_install_drawer(&p, "", to, sizeof to) && !games_install_drawer(&p, NULL, to, sizeof to));
+    }
     CHECK(games_shelf_drawer("A") && games_shelf_drawer("#") && games_shelf_drawer("0-9"));
     CHECK(!games_shelf_drawer("AB") && !games_shelf_drawer("") && !games_shelf_drawer(NULL) && !games_shelf_drawer("0-99"));
     memset(&p, 0, sizeof p);

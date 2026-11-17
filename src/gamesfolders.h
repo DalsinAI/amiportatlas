@@ -39,6 +39,13 @@ int port_on_disk_only(const Port *p);
  * goes to; NULL when it has none. */
 const char *games_drawer_of(const Port *p);
 
+/* Where an entry is installed on a machine with the Games drive: its
+ * drawer at the top of drive ("Games:" gives "Games:Ports" for a port,
+ * "Games:Exclusive" for one of our own). 0, and out empty, for an entry
+ * with no drawer there (an application, a tool): it goes where it went
+ * before. */
+int games_install_drawer(const Port *p, const char *drive, char *out, int max);
+
 /* A drawer that only sorts the games under it, as big sets have ("A", "B",
  * "0-9", "#"): a name of one character, or "0-9". Its drawers are the
  * games; it is not one itself. */

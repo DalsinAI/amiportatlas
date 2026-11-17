@@ -119,6 +119,17 @@ drawer it is in. In a drawer the player made, a drawer named as a listed
 game's marks that game found instead, so a port kept in `Games:Ported`
 is not shown twice.
 
+## Where a game is installed
+
+On a machine with the Games drive a game goes into its drawer there:
+`Games:Ports/KoboDeluxe` for a port, `Games:Exclusive/CanvasSkies` for one
+of our own, and so on for each source's drawer (`games_install_drawer`).
+The drawer is made when the drive has none. A drawer the player chose
+before (`ENV:AmiPortAtlas/Drawer`) still wins, and `Atlas INSTALL TO=`
+names another. With no Games drive it is `Work:Games`, then `Work:`, as
+before. The port Installer scripts follow the same rule (`DH2:Ports`;
+amicradle docs/porting/INSTALLER.md).
+
 ## Still to do
 
 3. The launcher as a commodity, in the systray once started.

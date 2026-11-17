@@ -55,7 +55,7 @@ UPDATE.
     Atlas UPDATE                     read every source again, count the updates
     Atlas SEARCH tyrian              find entries
     Atlas SHOW opentyrian            what the sources say about one
-    Atlas INSTALL opentyrian         install it (to Work:Games, or TO=drawer)
+    Atlas INSTALL opentyrian         install it (to Games:Ports, or TO=drawer)
     Atlas LIST UPDATES               what has an update
     Atlas UPGRADE YES                install every update, no questions
     Atlas LIST INSTALLED FROM=amicradle
