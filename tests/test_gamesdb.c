@@ -114,7 +114,7 @@ static void test_index(const char *path)
     db = gamesdb_open(path, why, sizeof why);
     CHECK(db != NULL);
     if (!db) { printf("%s\n", why); return; }
-    CHECK(is("PRAGMA user_version", "1"));
+    CHECK(is("PRAGMA user_version", "2"));
     CHECK(is("SELECT group_concat(name, ',') FROM (SELECT name FROM folders ORDER BY folder)",
              "Ports,WHDLoad,Itch.io,Aminet,Exclusive"));
     CHECK(gamesdb_count(db, GF_NONE, 0) == 0);
@@ -134,7 +134,10 @@ static void test_index(const char *path)
     f = one_list(atlas_json, aminet_json, "aminet-game");
     CHECK(f != NULL);
     if (!f) return;
+    gamesdb_set_today(db, "2026-11-17");
     CHECK(gamesdb_put_feed(db, f) == 6);
+    CHECK(gamesdb_new_since(db, "2026-01-01") == 0);         /* the first fill: nothing is news */
+    CHECK(is("SELECT count(*) FROM games WHERE first_seen IS NOT NULL OR updated IS NOT NULL", "0"));
     CHECK(is("SELECT value FROM meta WHERE key = 'generated'", "2026-11-17"));
     CHECK(gamesdb_count(db, GF_NONE, 0) == 4);               /* 4Pane and DirUtil are no games */
     CHECK(gamesdb_count(db, GF_PORTS, 0) == 2 && gamesdb_count(db, GF_EXCLUSIVE, 0) == 1);
@@ -181,7 +184,17 @@ static void test_index(const char *path)
                  " { \"id\": \"xboing\", \"number\": 5, \"title\": \"XBoing\", \"state\": \"released\" } ] }", NULL, NULL);
     CHECK(f != NULL);
     if (!f) return;
+    gamesdb_set_today(db, "2026-11-18");
     CHECK(gamesdb_put_feed(db, f) == 2);
+    /* The New page: XBoing is new, Kobo Deluxe has a new version; in order, the newest first. */
+    CHECK(is("SELECT group_concat(title || ':' || ifnull(first_seen, '-') || ':' || ifnull(updated, '-'), ' ') FROM"
+             " (SELECT * FROM games WHERE listed = 1 AND (first_seen >= '2026-11-18' OR updated >= '2026-11-18') ORDER BY title)",
+             "Kobo Deluxe:-:2026-11-18 XBoing:2026-11-18:-"));
+    CHECK(gamesdb_new_since(db, "2026-11-18") == 2 && gamesdb_new_since(db, "2026-11-19") == 0);
+    gamesdb_set_today(db, "2026-11-20");
+    CHECK(gamesdb_put_feed(db, f) == 2);                     /* read again with nothing changed: no news */
+    CHECK(gamesdb_new_since(db, "2026-11-19") == 0 && gamesdb_new_since(db, "2026-11-18") == 2);
+    gamesdb_set_today(db, NULL);
     CHECK(is("SELECT version || '|' || installed_version || '|' || path || '|' || listed FROM games WHERE id = 'kobo'",
              "0.5.2|0.5.0|Games:Ports/KoboDeluxe|1"));            /* an update shows: listed 0.5.2, here 0.5.0 */
     CHECK(is("SELECT count(*) || '|' || max(url) FROM shots WHERE game = 'kobo'", "1|https://example.org/k3.png"));
@@ -211,7 +224,7 @@ static void test_index(const char *path)
     CHECK(db != NULL);
     if (!db) return;
     CHECK(gamesdb_count(db, GF_NONE, 0) == 3 && gamesdb_count(db, GF_NONE, 1) == 2);
-    CHECK(gamesdb_text(db, "PRAGMA user_version = 2", why, sizeof why) == 0);
+    CHECK(gamesdb_text(db, "PRAGMA user_version = 3", why, sizeof why) == 0);
     gamesdb_close(db);
     db = gamesdb_open(path, why, sizeof why);
     CHECK(db == NULL && strstr(why, "newer AmiPortAtlas") != NULL);
@@ -231,7 +244,7 @@ static void test_index(const char *path)
     db = gamesdb_open(path, why, sizeof why);                       /* schema 0: made again */
     CHECK(db != NULL);
     if (!db) return;
-    CHECK(is("PRAGMA user_version", "1") && gamesdb_count(db, GF_NONE, 0) == 0);
+    CHECK(is("PRAGMA user_version", "2") && gamesdb_count(db, GF_NONE, 0) == 0);
     gamesdb_close(db);
     db = NULL;
     remove(path);

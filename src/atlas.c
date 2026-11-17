@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <dos/var.h>
 #include <dos/rdargs.h>
 
@@ -834,7 +835,7 @@ static int cmd_index(void)
 {
     const char *drive = arg(A_FROM) ? arg(A_FROM) : GAMESDB_DRIVE;
     const char *file = arg(A_TO) ? arg(A_TO) : GAMESDB_FILE;
-    char why[240], dir[300];
+    char why[240], dir[300], since[12];
     struct Process *me = (struct Process *)FindTask(NULL);
     APTR win = me->pr_WindowPtr;
     GamesDb *db;
@@ -850,13 +851,22 @@ static int cmd_index(void)
     if (!load(0)) return RETURN_ERROR;
     db = gamesdb_open(file, why, (int)sizeof why);
     if (!db) { printf("Atlas: %s\n", why); return RETURN_ERROR; }
+    {
+        char today[12];
+        time_t now = time(NULL);
+        struct tm *tm = localtime(&now);
+        if (tm && strftime(today, sizeof today, "%Y-%m-%d", tm)) gamesdb_set_today(db, today);
+        snprintf(since, sizeof since, "%s", tm ? today : "");
+    }
     if (!gamesdb_put_sources(db, S) || (listed = gamesdb_put_feed(db, F)) < 0 || !gamesdb_clear_found(db)) goto bad;
     for (i = 0; i < F->count; i++) {
         const Port *p = &F->ports[i];
         if (p->id && installed_version(p) && !installed_found(p))
             gamesdb_set_installed(db, p->id, installed_version(p), installed_path(p));
     }
-    printf("%d entries from the sources.\n", listed);
+    printf("%d entries from the sources", listed);
+    if (since[0] && gamesdb_new_since(db, since) > 0) printf(", %ld new or updated today", gamesdb_new_since(db, since));
+    printf(".\n");
     for (i = 0; i < GF_COUNT; i++) {
         int here;
         snprintf(dir, sizeof dir, "%s%s%s", drive, d && drive[d - 1] != ':' && drive[d - 1] != '/' ? "/" : "",

@@ -15,7 +15,7 @@
 #include "feed.h"
 #include "sources.h"
 
-#define GAMESDB_SCHEMA 1
+#define GAMESDB_SCHEMA 2
 #define GAMESDB_DRIVE  "Games:"
 #define GAMESDB_FILE   "Games:Atlas.db"   /* at the top of the Games drive, beside the launcher */
 
@@ -64,6 +64,15 @@ int  gamesdb_put_sources(GamesDb *db, const Sources *s);
  * it is on this machine. All in one transaction: on failure the index is
  * as it was. Answers how many entries are listed, -1 on failure. */
 int  gamesdb_put_feed(GamesDb *db, const Feed *f);
+
+/* Today's date, "2026-11-17", for the New page: an entry that put_feed sees
+ * for the first time gets it as first_seen, and one whose version changed
+ * gets it as updated. The first fill of an empty index marks nothing, or
+ * every game would be new on the first day. Not set, nothing is dated. */
+void gamesdb_set_today(GamesDb *db, const char *date);
+
+/* How many entries are new or updated on or after date. -1 on failure. */
+long gamesdb_new_since(GamesDb *db, const char *date);
 
 /* A game installed through AmiPortAtlas (ENVARC:AmiPortAtlas/Installed):
  * its version and its drawer. version NULL: no longer installed. Answers 1

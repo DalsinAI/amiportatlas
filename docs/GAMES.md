@@ -36,7 +36,7 @@ Exclusive whichever source lists it. An entry that is not a game (an
 application, a tool), or that comes from any other source, is indexed with
 no drawer.
 
-Text is UTF-8. `PRAGMA user_version` is the schema's number (1): an index
+Text is UTF-8. `PRAGMA user_version` is the schema's number (2): an index
 with an older number is made again empty, a newer one is refused.
 
 | Table | Rows | Columns |
@@ -61,6 +61,15 @@ AmiPortAtlas; an older one than `version` is an update), `found` (1: its
 drawer is in one of the five drawers), `path` (its drawer's full name) and
 `found_program`.
 
+`games`, for the New page (Dale, 17 November 2026: "a 'new' which is a
+notifiactions / news list page of games"): `first_seen`, the date
+(`2026-11-17`) the index first saw the entry, and `updated`, the date its
+`version` last changed. The first fill of an empty index dates nothing, so
+the page starts empty rather than with every game. The page is
+
+    SELECT ... FROM games WHERE listed = 1 AND (first_seen >= :since OR updated >= :since)
+    ORDER BY max(ifnull(first_seen, ''), ifnull(updated, '')) DESC, title
+
 A drawer in one of the five that no source lists gets a row of its own:
 its `id` is `disk:` and the two names in small letters
 (`disk:whdload/lemmings`), its `title` is the drawer's name, its `source`
@@ -76,7 +85,8 @@ machine: then it stays, `listed` 0, until it is removed.
 1. The index built on the Amiga: AmiPortAtlas and Atlas linked with
    DalsinAI/gfopensqlite (soft float, one task), `Atlas INDEX` to make it
    from the Shell, and the five drawers looked through.
-2. The window reading the index: the five drawers as its sections.
+2. The window reading the index: the five drawers as its sections, and
+   the New page.
 3. The launcher as a commodity, in the systray once started.
 4. The full screen mode driven by a joystick.
 5. Sources for WHDLoad, itch.io and Aminet: what each may fetch.
