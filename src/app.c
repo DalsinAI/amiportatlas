@@ -322,6 +322,45 @@ static int list_files(const char *dir, char (**names)[40], int *n)
     return 1;
 }
 
+/* The drawers at the top of the Games drive, for the window's sections: they
+ * are found each time, so a drawer the player makes there gets a tab. The
+ * launcher's own drawer is not one of them. No Games drive: none, and no
+ * "insert volume" requester. */
+#define GAMES_DRIVE "Games:"
+static int own_drawer(const char *name)
+{
+    const char *own = "amiportatlas";
+    for (; *name && *own; name++, own++) if ((*name | 32) != *own) return 0;
+    return *name == *own;
+}
+
+static void find_drawers(void)
+{
+    static char found[24][32];
+    const char *names[24];
+    struct FileInfoBlock *fib = (struct FileInfoBlock *)AllocDosObject(DOS_FIB, NULL);
+    struct Process *me = (struct Process *)FindTask(NULL);
+    APTR win = me->pr_WindowPtr;
+    int n = 0;
+    BPTR l;
+    me->pr_WindowPtr = (APTR)-1;
+    l = Lock((STRPTR)GAMES_DRIVE, ACCESS_READ);
+    me->pr_WindowPtr = win;
+    if (l) {
+        if (fib && Examine(l, fib))
+            while (n < 24 && ExNext(l, fib)) {
+                const char *name = (const char *)fib->fib_FileName;
+                if (fib->fib_DirEntryType <= 0 || strlen(name) >= 32 || own_drawer(name)) continue;
+                snprintf(found[n], sizeof found[n], "%s", name);
+                names[n] = found[n];
+                n++;
+            }
+        UnLock(l);
+    }
+    if (fib) FreeDosObject(DOS_FIB, fib);
+    ui_set_drawers(names, n);
+}
+
 static void drop_old_pictures(void)
 {
     char (*names)[40], path[160];
@@ -533,6 +572,7 @@ static void host_scan(void *data)
     free(list);
     SetVar((STRPTR)"AmiPortAtlas/Scanned", (STRPTR)"1", 1, GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
     busy(0);
+    find_drawers();
     ui_refill();
     if (found < 0) { status("There wasn't the memory to look for installed games."); return; }
     bare = install_missing_icons(0);
@@ -620,6 +660,7 @@ int main(void)
 
     share_cache();
     installed_load();
+    find_drawers();
     read_sources(0);            /* the saved copies show at once */
     if (!all_fresh()) read_sources(1);
     {

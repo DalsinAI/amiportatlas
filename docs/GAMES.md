@@ -82,8 +82,20 @@ machine: then it stays, `listed` 0, until it is removed.
 
 ## The window's sections
 
-Above the list is a row of tabs: **All**, **New**, then the five drawers
-in their order. A drawer's tab shows the games that belong in it
+Above the list is a row of tabs: **All**, **New**, then a tab for each
+drawer there is something to show for. The tabs are found, not fixed
+(Dale, 17 November 2026: "the tabs at hte top need to autodiscvoer some
+how"). A drawer gets a tab when
+
+- it is at the top of the Games drive, whatever its name (the launcher's
+  own drawer apart), so a drawer the player makes there shows up; or
+- a source lists a game that belongs in it, so a new source's drawer shows
+  up as soon as its index is read, and with no Games drive at all the
+  window still has the sections the sources fill.
+
+The five standard drawers come first in their order, any other after
+them. The drive is looked at when the program starts and at every Find
+installed. A drawer's tab shows the games that belong in it
 (`src/gamesfolders.c`, the same rule the index uses); New shows what the
 index dates as new or updated. Find, Show, Fit, From and the sorting work
 inside whichever section is shown.

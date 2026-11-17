@@ -185,11 +185,31 @@ int main(int argc, char **argv)
             if (ui_selected() && strcmp(ui_selected()->title, "Kobo Deluxe") == 0) break;
         }
     }
-    /* The sections above the list: All, New, then the Games drive's five drawers. */
+    /* The sections above the list are found: All, New, then a tab for each drawer with something to show. */
     {
         int all = ui_rows(), i, n = 0;
+        static const char *const on_drive[] = { "whdload", "Ports", "Homebrew", "Itch.io", "homebrew" };
         olui_el *tabs = olui_find(ui, "sections");
         CHECK(tabs != NULL && olui_tabs_current(tabs) == 0 && ui_section() == 0);
+        /* no Games drive: only the drawers the sources have games for */
+        CHECK(ui_sections() == 5);
+        CHECK(strcmp(ui_section_name(0), "All") == 0 && strcmp(ui_section_name(1), "New") == 0);
+        CHECK(strcmp(ui_section_name(2), "Ports") == 0 && strcmp(ui_section_name(3), "Aminet") == 0
+              && strcmp(ui_section_name(4), "Exclusive") == 0 && ui_section_name(5) == NULL);
+        CHECK(ui_find_section("WHDLoad") == -1 && ui_find_section("aminet") == 3);
+        ui_set_section(3);                                  /* Aminet: Tiny Tetris */
+        CHECK(ui_rows() == 1 && ui_selected() && strcmp(ui_selected()->title, "Tiny Tetris") == 0);
+        /* the Games drive's drawers are found: the standard ones in their order, a new one after them */
+        ui_set_drawers(on_drive, 5);
+        CHECK(ui_sections() == 8);
+        CHECK(strcmp(ui_section_name(2), "Ports") == 0 && strcmp(ui_section_name(3), "WHDLoad") == 0
+              && strcmp(ui_section_name(4), "Itch.io") == 0 && strcmp(ui_section_name(5), "Aminet") == 0
+              && strcmp(ui_section_name(6), "Exclusive") == 0 && strcmp(ui_section_name(7), "Homebrew") == 0);
+        CHECK(ui_section() == 5 && ui_rows() == 1);         /* still on Aminet, which moved along */
+        tabs = olui_find(ui, "sections");
+        CHECK(tabs != NULL && olui_tabs_current(tabs) == 5);
+        ui_set_drawers(on_drive, 5);                        /* the same again: nothing changes */
+        CHECK(olui_find(ui, "sections") == tabs && ui_section() == 5);
         ui_set_section(1);                                  /* New */
         CHECK(ui_rows() == 2 && olui_tabs_current(tabs) == 1);
         CHECK(ui_selected() && strcmp(ui_selected()->title, "Kobo Deluxe") == 0);
@@ -198,24 +218,32 @@ int main(int argc, char **argv)
         CHECK(n > 0 && n < all);
         for (i = 0; i < n; i++) { ui_select_row(i); CHECK(ui_selected() && !port_is_original(ui_selected())
                                                           && strcmp(ui_selected()->source, ATLAS_SOURCE) == 0); }
-        ui_set_section(3); CHECK(ui_rows() == 0 && ui_selected() == NULL);   /* WHDLoad: no source yet */
+        ui_set_section(3); CHECK(ui_rows() == 0 && ui_selected() == NULL);   /* WHDLoad: on the drive, no source yet */
         ui_set_section(4); CHECK(ui_rows() == 0);                            /* Itch.io */
-        ui_set_section(5);                                  /* Aminet: Tiny Tetris */
-        CHECK(ui_rows() == 1 && ui_selected() && strcmp(ui_selected()->title, "Tiny Tetris") == 0);
+        ui_set_section(7); CHECK(ui_rows() == 0);                            /* Homebrew: a drawer of the player's own */
         ui_set_section(6);                                  /* Exclusive: our own */
         CHECK(ui_rows() >= 1);
         for (i = 0; i < ui_rows(); i++) { ui_select_row(i); CHECK(ui_selected() && port_is_original(ui_selected())); }
         CHECK(n + 1 + ui_rows() == all);                    /* every game is in one drawer */
-        ui_set_section(7); CHECK(ui_section() == 6);        /* no such section */
+        ui_set_section(8); CHECK(ui_section() == 6);        /* no such section */
+        /* a drawer that goes while it is shown: back to All */
+        ui_set_section(7);
+        ui_set_drawers(on_drive, 2);
+        CHECK(ui_sections() == 6 && ui_section() == 0 && ui_rows() == all && ui_find_section("Homebrew") == -1);
+        ui_set_drawers(on_drive, 5);
         /* a click on a tab does the same */
         {
             olui_rect at;
+            tabs = olui_find(ui, "sections");
+            ui_set_section(2);
+            CHECK(olui_layout(ui, w, h));
             CHECK(olui_box(ui, tabs, &at));
             olui_mouse(ui, (int)at.x + 12, (int)at.y + 8, OLUI_MOUSE_DOWN);
             olui_mouse(ui, (int)at.x + 12, (int)at.y + 8, OLUI_MOUSE_UP);
             CHECK(ui_section() == 0 && ui_rows() == all);
         }
-        ui_set_section(argc > 6 ? atoi(argv[6]) : 0);       /* the picture can show a section */
+        if (argc > 6 && atoi(argv[6]) == 0) ui_set_drawers(NULL, 0);   /* the picture: 0 no Games drive, else that section */
+        else if (argc > 6) ui_set_section(atoi(argv[6]));
         for (i = 0; i < ui_rows(); i++) {
             ui_select_row(i);
             if (ui_selected() && strcmp(ui_selected()->title, "Kobo Deluxe") == 0) break;

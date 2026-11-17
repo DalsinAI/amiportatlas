@@ -51,8 +51,15 @@ Port *ui_selected(void);
 void  ui_select_row(int row);
 int   ui_rows(void);
 
-/* The section shown above the list: 0 All, 1 New, 2 to 6 the Games drive's
- * drawers in their order (Ports, WHDLoad, Itch.io, Aminet, Exclusive). */
+/* The sections above the list are found, not fixed: All and New, then a
+ * tab for each drawer at the top of the Games drive (ui_set_drawers: the
+ * names the host found there, copied; none when there is no Games drive)
+ * and for each drawer a source lists a game for. The five standard drawers
+ * come first in their order (gamesfolders.h), any other after. */
+void  ui_set_drawers(const char *const *names, int n);
+int   ui_sections(void);                 /* how many tabs, All and New among them */
+const char *ui_section_name(int section);
+int   ui_find_section(const char *name); /* without case; -1 when there is no such tab */
 void  ui_set_section(int section);
 int   ui_section(void);
 
