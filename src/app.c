@@ -792,7 +792,7 @@ static int show_window(void)
 /* ---- the full screen mode (big.h): a screen of its own, like Workbench's, driven by the joystick in port 2 ---- */
 
 static UiHost host;              /* what the window and the full screen ask of the program */
-static struct Library *LowLevelBase;
+struct Library *LowLevelBase;
 #ifdef __amigaos4__
 struct LowLevelIFace *ILowLevel;
 #endif
