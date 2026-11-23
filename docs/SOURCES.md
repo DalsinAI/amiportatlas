@@ -164,11 +164,26 @@ copy of the game. Run it off the Amiga to refresh them:
     python3 tools/sources_index.py aminet INDEX.gz data/aminet-game.json
     python3 tools/sources_index.py whdload all.html data/whdload.json
 
+## itch.io: listed with their pages
+
+itch.io's own feeds of the games tagged for the Amiga (`tag-amiga`,
+`tag-amiga-500`, `tag-amiga-1200`, `tag-aga` and `tag-amiga-aga`, every page)
+become `data/itchio.json` the same way: the game's page, its maker, its price
+and the year it went up, each game once, and Get it... opens the page. A game
+whose builds are only for other systems (Windows, HTML...) is left out unless
+its name or line says it is for the Amiga. Its id starts `itch`, so it sits in
+the Itch.io tab with the games already in `Games:Itch.io`.
+
+    for t in amiga amiga-500 amiga-1200 aga amiga-aga; do p=1
+      while curl -s -o tag-$t-$p.xml "https://itch.io/games/tag-$t.xml?page=$p" &&
+            grep -q '<item>' tag-$t-$p.xml; do p=$((p+1)); sleep 1; done; done
+    python3 tools/sources_index.py itchio tag-*.xml data/itchio.json
+
 ## Still to do
 
 1. Readers for OS4Depot, MorphOS-Storage and AROS Archives, each turning
    the site's listing into an index the master list then names. Aminet's
-   games and WHDLoad's installs have theirs (below).
+   games, WHDLoad's installs and itch.io's Amiga games have theirs (above).
 2. Installs for other systems: an OS4Depot or MorphOS-Storage entry is
    listed and opens its page, and installs once AmiPortAtlas is built
    there and knows its systems.
