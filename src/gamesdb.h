@@ -38,8 +38,12 @@ int  gamesdb_put_sources(GamesDb *db, const Sources *s);
  * is brought up to date and keeps what the machine knows of it (installed,
  * found, its drawer on disk); one the sources no longer list goes, unless
  * it is on this machine. All in one transaction: on failure the index is
- * as it was. Answers how many entries are listed, -1 on failure. */
+ * as it was. Answers how many entries are listed, -1 on failure. The same
+ * list as the last one put in (gamesdb_feed_mark, kept in meta) writes nothing. */
 int  gamesdb_put_feed(GamesDb *db, const Feed *f);
+
+/* Sixteen hex digits that change when anything the index keeps of the list does. */
+void gamesdb_feed_mark(const Feed *f, char out[17]);
 
 /* Today's date, "2026-11-17", for the New page: an entry that put_feed sees
  * for the first time gets it as first_seen, and one whose version changed

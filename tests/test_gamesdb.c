@@ -363,6 +363,32 @@ static void test_found_fast(const char *path)
     CHECK(f != NULL);
     if (!f) return;
     CHECK(gamesdb_put_feed(db, f) == 2);
+
+    /* The same list again writes nothing: a change made behind its back stays. */
+    {
+        char a[17], b[17];
+        Feed *g;
+        gamesdb_feed_mark(f, a);
+        CHECK(strlen(a) == 16 && is("SELECT value FROM meta WHERE key = 'feed'", a));
+        CHECK(gamesdb_text(db, "UPDATE games SET summary = 'untouched' WHERE id = 'kobo'", why, sizeof why) == 0);
+        CHECK(gamesdb_put_feed(db, f) == 2);
+        CHECK(is("SELECT summary FROM games WHERE id = 'kobo'", "untouched"));
+        g = one_list("{ \"schema_version\": 1, \"generated\": \"2026-11-23\", \"ports\": ["
+                     " { \"id\": \"kobo\", \"number\": 1, \"title\": \"Kobo Deluxe\", \"drawer\": \"KoboDeluxe\", \"version\": \"0.5.2\" } ] }",
+                     "{ \"schema_version\": 1, \"generated\": \"2026-11-23\", \"ports\": ["
+                     " { \"id\": \"zee\", \"title\": \"Zeewolf\", \"drawer\": \"Zeewolf\" } ] }", "whdload");
+        CHECK(g != NULL);
+        if (g) {
+            gamesdb_feed_mark(g, b);
+            CHECK(strcmp(a, b) != 0);                                   /* one field changed: a new mark */
+            CHECK(gamesdb_put_feed(db, g) == 2);
+            CHECK(is("SELECT (summary IS NULL) || '|' || version FROM games WHERE id = 'kobo'", "1|0.5.2"));
+            CHECK(is("SELECT value FROM meta WHERE key = 'feed'", b));
+            feed_free(g);
+        }
+        CHECK(gamesdb_put_feed(db, f) == 2);                            /* and back */
+        CHECK(is("SELECT value FROM meta WHERE key = 'feed'", a));
+    }
     mine = gamesdb_folder(db, "More Games");
     CHECK(mine >= GF_COUNT);
 
