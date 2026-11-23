@@ -43,6 +43,7 @@ test: $(OUT)/test_host $(OUT)/ui_host $(OUT)/big_host $(OUT)/test_cx test-games
 	$(OUT)/test_host $(FEED)
 	$(OUT)/test_cx
 	python3 tests/test_sources_index.py
+	python3 tests/test_version.py
 	$(OUT)/ui_host $(FEED) $(THEME) $(OUT)/window-ops.txt
 	$(OUT)/big_host $(FEED) $(THEME) $(OUT)/big-ops.txt
 
