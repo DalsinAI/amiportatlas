@@ -10,7 +10,7 @@ play. When a new version comes out, AmiPortAtlas tells you and updates it
 in one click.
 
 And it doesn't stop at our own ports. Like APT on Linux, AmiPortAtlas reads
-**sources**: the Port Atlas, the sources in our master list (Aminet,
+**sources**: the Port Atlas, the sources in our master list (Aminet, WHDLoad, itch.io,
 OS4Depot, MorphOS-Storage, AROS Archives as their readers arrive) and any
 source you add yourself. They all show up as one list you can search, sort
 and filter.

@@ -5,11 +5,16 @@ install later"): each turns a site's own listing into an index of the Port Atlas
 
     python3 tools/sources_index.py aminet  INDEX.gz|INDEX   data/aminet-game.json
     python3 tools/sources_index.py whdload all.html          data/whdload.json
+    python3 tools/sources_index.py itchio  tag-*.xml ...     data/itchio.json
 
 aminet:  Aminet's whole index (https://aminet.net/INDEX.gz): the game/ drawers, less data, hints, patches and
          editors, less builds for other systems (OS4, MorphOS, AROS x86, PPC) and sources.
 whdload: the table of every install (https://www.whdload.de/games/all.html): the install's page; the game
          itself is the player's own (WHDLoad installs run the original disks).
+itchio:  itch.io's own feeds of the games tagged for the Amiga (https://itch.io/games/tag-amiga.xml?page=N, and
+         tag-amiga-500, tag-amiga-1200, tag-aga, tag-amiga-aga), every page, one game once: the game's page, its
+         maker, price and year. A game whose builds are only for other systems (Windows, HTML...) is left out
+         unless its name or line says it is for the Amiga.
 They run off the Amiga (where the Port Atlas is made); nothing is downloaded but the listing.
 MIT, (c) 2026 The AmiCradle Team.
 """
@@ -89,11 +94,64 @@ def whdload_entries(text):
     return out
 
 
+ITEM = re.compile(r"<item>(.*?)</item>", re.S)
+AMIGA_WORDS = re.compile(r"(^|[^a-z0-9])(amiga|aga|ocs|ecs|a500|a600|a1200|a4000|cd32|whdload|kickstart|amigaos)([^a-z0-9]|$)", re.I)
+
+
+def tag(item, name):
+    m = re.search(r"<%s>(.*?)</%s>" % (name, name), item, re.S)
+    if not m:
+        return ""
+    text = m.group(1)
+    c = re.match(r"^<!\[CDATA\[(.*)\]\]>$", text, re.S)
+    return html.unescape(c.group(1) if c else text)
+
+
+def itch_item(item):
+    """One <item> of an itch.io feed as an entry; None for one that isn't for the Amiga."""
+    page = tag(item, "link").strip() or tag(item, "guid").strip()
+    m = re.match(r"^https://([a-z0-9-]+)\.itch\.io/([a-z0-9_-]+)$", page, re.I)
+    if not m:
+        return None
+    title = tag(item, "plainTitle").strip() or tag(item, "title").strip()
+    line = re.sub(r"<[^>]+>", "", tag(item, "description")).strip().split("\n")[0].strip()
+    others = re.findall(r"<([a-z]+)>yes</\1>", tag(item, "platforms"))
+    if others and not (AMIGA_WORDS.search(title) or AMIGA_WORDS.search(line)):
+        return None
+    kinds = re.findall(r"\[([^\]]+)\]", tag(item, "title"))
+    price = tag(item, "price").strip()
+    free = re.match(r"^\D*0+([.,]0+)?\D*$", price) is not None
+    year = re.search(r"\b(19|20)\d\d\b", tag(item, "createDate"))
+    e = {"id": plain_id("itch-" + m.group(1) + "-" + m.group(2)), "title": title, "kind": "game", "state": "released",
+         "short": line or title, "author": m.group(1), "category": kinds[-1].lower() if len(kinds) > 1 else "itch.io",
+         "release_url": page}
+    e["short"] = (e["short"] + (" (free)" if free or not price else " (%s)" % price))[:200]
+    if year:
+        e["year"] = year.group(0)
+    return e
+
+
+def itchio_entries(texts):
+    out, seen = [], set()
+    for text in texts:
+        for item in ITEM.findall(text):
+            e = itch_item(item)
+            if not e or e["id"] in seen:
+                continue
+            seen.add(e["id"])
+            out.append(e)
+    out.sort(key=lambda p: p["title"].lower())
+    return out
+
+
 def index(name, ports):
     return {"schema_version": 1, "generated": date.today().isoformat(), "name": name, "ports": ports}
 
 
 def main(argv):
+    if len(argv) >= 4 and argv[1] == "itchio":
+        texts = [open(f, encoding="utf-8").read() for f in argv[2:-1]]
+        return write(argv[-1], index("itch.io: Amiga games", itchio_entries(texts)))
     if len(argv) != 4 or argv[1] not in ("aminet", "whdload"):
         print(__doc__)
         return 2
@@ -106,6 +164,10 @@ def main(argv):
         doc = index("Aminet: games", aminet_entries(text.splitlines()))
     else:
         doc = index("WHDLoad installs", whdload_entries(text))
+    return write(dst, doc)
+
+
+def write(dst, doc):
     with open(dst, "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False, separators=(",", ":"))
         f.write("\n")

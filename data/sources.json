@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "generated": "2026-11-17",
+ "generated": "2026-11-23",
  "note": "The master list of sources AmiPortAtlas and Atlas read, from DalsinAI/amiportatlas main. docs/SOURCES.md has the fields. A source with no index yet is listed and read once its index is up.",
  "sources": [
   {"id": "amicradle", "name": "AmiCradle Port Atlas", "index": "https://www.amicradle.com/ports/ports.json",
@@ -14,6 +14,10 @@
    "home": "https://www.whdload.de/games/all.html",
    "on": true, "checked": false, "pictures": false, "systems": ["os3", "gfos"],
    "note": "Every WHDLoad install, listed by tools/sources_index.py with its page; the game itself is your own."},
+  {"id": "itchio", "name": "itch.io: Amiga games", "index": "https://raw.githubusercontent.com/DalsinAI/amiportatlas/main/data/itchio.json",
+   "home": "https://itch.io/games/tag-amiga",
+   "on": true, "checked": false, "pictures": false, "systems": ["os3", "gfos"],
+   "note": "The games itch.io lists for the Amiga, by tools/sources_index.py with each game's page: Get it... opens the page."},
   {"id": "aminet-util", "name": "Aminet: utilities", "index": null, "home": "https://aminet.net/tree?path=util",
    "on": false, "checked": false, "pictures": false, "systems": ["os3", "gfos", "aros-m68k"],
    "note": "Aminet's utility drawers. Its index comes from the Aminet reader, still to be written."},
