@@ -36,7 +36,7 @@ Exclusive whichever source lists it. An entry that is not a game (an
 application, a tool), or that comes from any other source, is indexed with
 no drawer.
 
-Text is UTF-8. `PRAGMA user_version` is the schema's number (2): an index
+Text is UTF-8. `PRAGMA user_version` is the schema's number (3): an index
 with an older number is made again empty, a newer one is refused.
 
 | Table | Rows | Columns |

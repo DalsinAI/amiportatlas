@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sqlite3.h>
 #include "../src/gamesdb.h"
 
 static int failures;
@@ -144,7 +145,7 @@ static void test_index(const char *path)
     db = gamesdb_open(path, why, sizeof why);
     CHECK(db != NULL);
     if (!db) { printf("%s\n", why); return; }
-    CHECK(is("PRAGMA user_version", "2"));
+    CHECK(is("PRAGMA user_version", "3"));
     CHECK(is("SELECT group_concat(name, ',') FROM (SELECT name FROM folders ORDER BY folder)",
              "Ports,WHDLoad,Itch.io,Aminet,Exclusive"));
     CHECK(gamesdb_count(db, GF_NONE, 0) == 0);
@@ -278,7 +279,7 @@ static void test_index(const char *path)
     CHECK(db != NULL);
     if (!db) return;
     CHECK(gamesdb_count(db, GF_NONE, 0) == 3 && gamesdb_count(db, GF_NONE, 1) == 2);
-    CHECK(gamesdb_text(db, "PRAGMA user_version = 3", why, sizeof why) == 0);
+    CHECK(gamesdb_text(db, "PRAGMA user_version = 4", why, sizeof why) == 0);
     gamesdb_close(db);
     db = gamesdb_open(path, why, sizeof why);
     CHECK(db == NULL && strstr(why, "newer AmiPortAtlas") != NULL);
@@ -298,7 +299,97 @@ static void test_index(const char *path)
     db = gamesdb_open(path, why, sizeof why);                       /* schema 0: made again */
     CHECK(db != NULL);
     if (!db) return;
-    CHECK(is("PRAGMA user_version", "2") && gamesdb_count(db, GF_NONE, 0) == 0);
+    CHECK(is("PRAGMA user_version", "3") && gamesdb_count(db, GF_NONE, 0) == 0);
+    gamesdb_close(db);
+    db = NULL;
+    remove(path);
+}
+
+/* The plan SQLite makes for sql, its steps' words joined, from a connection of its own. */
+static void plan(const char *path, const char *sql, char *out, size_t max)
+{
+    sqlite3 *s;
+    sqlite3_stmt *st;
+    char *q = sqlite3_mprintf("EXPLAIN QUERY PLAN %s", sql);
+    out[0] = 0;
+    if (sqlite3_open(path, &s) == SQLITE_OK && sqlite3_prepare_v2(s, q, -1, &st, NULL) == SQLITE_OK) {
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            size_t at = strlen(out);
+            snprintf(out + at, max - at, "%s; ", (const char *)sqlite3_column_text(st, 3));
+        }
+        sqlite3_finalize(st);
+    }
+    sqlite3_close(s);
+    sqlite3_free(q);
+}
+
+static long count_from_outside(const char *path, const char *sql)
+{
+    sqlite3 *s;
+    sqlite3_stmt *st;
+    long n = -1;
+    if (sqlite3_open(path, &s) == SQLITE_OK && sqlite3_prepare_v2(s, sql, -1, &st, NULL) == SQLITE_OK) {
+        if (sqlite3_step(st) == SQLITE_ROW) n = sqlite3_column_int(st, 0);
+        sqlite3_finalize(st);
+    }
+    sqlite3_close(s);
+    return n;
+}
+
+/* Lab, 23 Nov: with 10,140 entries from four sources the window stayed at
+ * "Starting..." while each drawer on the Games drive was a transaction of
+ * its own (four syncs) and a search through every entry. Now the drive's
+ * drawers go in as one transaction and each search uses games_by_drawer. */
+static void test_found_fast(const char *path)
+{
+    char why[200], text[600];
+    Feed *f;
+    int i, mine;
+    remove(path);
+    db = gamesdb_open(path, why, sizeof why);
+    CHECK(db != NULL);
+    if (!db) return;
+    plan(path, gamesdb_found_sql(1), text, sizeof text);
+    CHECK(strstr(text, "games_by_drawer") != NULL && strstr(text, "SCAN games") == NULL);
+    if (!strstr(text, "games_by_drawer")) printf("  in a folder: %s\n", text);
+    plan(path, gamesdb_found_sql(0), text, sizeof text);
+    CHECK(strstr(text, "games_by_drawer") != NULL && strstr(text, "SCAN games") == NULL);
+    if (!strstr(text, "games_by_drawer")) printf("  anywhere: %s\n", text);
+
+    f = one_list("{ \"schema_version\": 1, \"generated\": \"2026-11-23\", \"ports\": ["
+                 " { \"id\": \"kobo\", \"number\": 1, \"title\": \"Kobo Deluxe\", \"drawer\": \"KoboDeluxe\" } ] }",
+                 "{ \"schema_version\": 1, \"generated\": \"2026-11-23\", \"ports\": ["
+                 " { \"id\": \"zee\", \"title\": \"Zeewolf\", \"drawer\": \"Zeewolf\" } ] }", "whdload");
+    CHECK(f != NULL);
+    if (!f) return;
+    CHECK(gamesdb_put_feed(db, f) == 2);
+    mine = gamesdb_folder(db, "More Games");
+    CHECK(mine >= GF_COUNT);
+
+    /* One transaction: nothing is seen from outside until it ends. */
+    CHECK(gamesdb_begin(db));
+    for (i = 0; i < 200; i++) {
+        char d[20], p[60];
+        snprintf(d, sizeof d, "Game%03d", i);
+        snprintf(p, sizeof p, "Games:More Games/%s", d);
+        CHECK(gamesdb_put_found(db, mine, d, p, NULL) == 0);
+    }
+    CHECK(gamesdb_put_found(db, mine, "ZEEWOLF", "Games:More Games/ZEEWOLF", NULL) == 1);    /* listed, any drawer */
+    CHECK(gamesdb_put_found(db, GF_PORTS, "kobodeluxe", "Games:Ports/KoboDeluxe", NULL) == 1);
+    CHECK(gamesdb_put_found(db, GF_PORTS, "Zeewolf", "Games:Ports/Zeewolf", NULL) == 0);      /* not a port */
+    CHECK(count_from_outside(path, "SELECT count(*) FROM games WHERE id LIKE 'disk:%'") == 0);
+    CHECK(gamesdb_end(db, 1));
+    CHECK(count_from_outside(path, "SELECT count(*) FROM games WHERE id LIKE 'disk:%'") == 201);
+    CHECK(count_from_outside(path, "SELECT count(*) FROM games WHERE found = 1 AND listed = 1") == 2);
+
+    /* Dropped: as it was. */
+    CHECK(gamesdb_begin(db));
+    CHECK(gamesdb_put_found(db, mine, "Another", "Games:More Games/Another", NULL) == 0);
+    CHECK(gamesdb_end(db, 0) == 0);
+    CHECK(is("SELECT count(*) FROM games WHERE id LIKE 'disk:%'", "201"));
+    CHECK(gamesdb_end(db, 0) == 0);                 /* none open */
+    CHECK(gamesdb_begin(db) && gamesdb_end(db, 1)); /* and the index still takes one */
+    feed_free(f);
     gamesdb_close(db);
     db = NULL;
     remove(path);
@@ -351,6 +442,7 @@ int main(int argc, char **argv)
     const char *path = "build/test-games.db";
     test_folders();
     test_index(path);
+    test_found_fast(path);
     if (argc > 1) test_real_feed(argv[1], path);
     if (failures) { printf("%d FAILED\n", failures); return 1; }
     printf("games index: all passed\n");

@@ -33,7 +33,7 @@ static const char schema_sql[] =
     "CREATE INDEX games_by_news ON games (first_seen, updated);"
     "CREATE INDEX games_by_title ON games (title);"
     "CREATE INDEX games_by_folder ON games (folder, title);"
-    "CREATE INDEX games_by_drawer ON games (folder, drawer);"
+    "CREATE INDEX games_by_drawer ON games (drawer, folder);"   /* put_found asks by drawer, with or without folder */
     "CREATE TABLE shots (game TEXT NOT NULL, n INTEGER NOT NULL, url TEXT NOT NULL, PRIMARY KEY (game, n)) WITHOUT ROWID;"
     "CREATE TABLE needs (game TEXT NOT NULL, what TEXT NOT NULL, name TEXT NOT NULL,"
     " PRIMARY KEY (game, what, name)) WITHOUT ROWID;";
@@ -395,15 +395,30 @@ static int folder_name(GamesDb *db, int folder, char *out, int max)
     return got;
 }
 
+#define FOUND_SET "UPDATE games SET found = 1, path = ?3, found_program = ?4 WHERE id = (SELECT id FROM games WHERE "
+#define FOUND_PICK " AND listed = 1 ORDER BY (source = '" ATLAS_SOURCE "') DESC, id LIMIT 1)"
+#define FOUND_IN_FOLDER FOUND_SET "drawer = ?2 AND folder = ?1" FOUND_PICK
+#define FOUND_ANYWHERE  FOUND_SET "drawer = ?2 AND ?1 >= 0" FOUND_PICK
+
+const char *gamesdb_found_sql(int in_folder) { return in_folder ? FOUND_IN_FOLDER : FOUND_ANYWHERE; }
+
+int gamesdb_begin(GamesDb *db) { return run(db, "BEGIN"); }
+
+int gamesdb_end(GamesDb *db, int keep)
+{
+    if (keep && run(db, "COMMIT")) return 1;
+    sqlite3_exec(db->sql, "ROLLBACK", NULL, NULL, NULL);
+    return 0;
+}
+
 int gamesdb_put_found(GamesDb *db, int folder, const char *drawer, const char *path, const char *program)
 {
     sqlite3_stmt *st;
     char id[200], low[120], in[64];
     int i, n;
     if (folder < 0 || !drawer || !*drawer || !path || !folder_name(db, folder, in, (int)sizeof in)) return -1;
-    if (sqlite3_prepare_v2(db->sql, "UPDATE games SET found = 1, path = ?3, found_program = ?4 WHERE id ="
-                           " (SELECT id FROM games WHERE (folder = ?1 OR ?1 >= " GF_COUNT_TEXT ") AND listed = 1 AND drawer = ?2"
-                           "  ORDER BY (source = '" ATLAS_SOURCE "') DESC, id LIMIT 1)", -1, &st, NULL) != SQLITE_OK) {
+    /* Two forms rather than "folder = ?1 OR ?1 >= 5", which SQLite answers by reading every row. */
+    if (sqlite3_prepare_v2(db->sql, folder < GF_COUNT ? FOUND_IN_FOLDER : FOUND_ANYWHERE, -1, &st, NULL) != SQLITE_OK) {
         fail(db);
         return -1;
     }

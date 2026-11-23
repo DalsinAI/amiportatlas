@@ -16,7 +16,7 @@
 #include "sources.h"
 #include "gamesfolders.h"
 
-#define GAMESDB_SCHEMA 2
+#define GAMESDB_SCHEMA 3
 #define GAMESDB_DRIVE  "Games:"
 #define GAMESDB_FILE   "Games:Atlas.db"   /* at the top of the Games drive, beside the launcher */
 
@@ -79,6 +79,15 @@ int  gamesdb_folder(GamesDb *db, const char *name);
  * Answers 1 when it matched a listed game, 0 when it made or kept a row of
  * its own, -1 on failure. */
 int  gamesdb_put_found(GamesDb *db, int folder, const char *drawer, const char *path, const char *program);
+
+/* Many put_found and set_installed calls as one transaction: on a floppy-speed
+ * Amiga drive each one alone is a write of the journal and the file. end
+ * keeps them (keep 1, answers 1 when they were written) or drops them. */
+int  gamesdb_begin(GamesDb *db);
+int  gamesdb_end(GamesDb *db, int keep);
+
+/* put_found's search, for the tests: in one of the five, or in any. */
+const char *gamesdb_found_sql(int in_folder);
 
 /* Each game on the drive that no source lists given to fn: its id, the name
  * of the drawer at the top of the drive it is in, its title and its own
