@@ -46,7 +46,7 @@
 #define CACHE      "PROGDIR:Cache"
 #define PICTURES   CACHE "/Pictures"   /* kept until the Atlas stops naming them */
 
-static const char vers[] = "$VER: AmiPortAtlas 0.3.0 (17.11.2026) The AmiCradle Team";
+static const char vers[] = "$VER: AmiPortAtlas 0.4.0 (23.11.2026) The AmiCradle Team";
 
 static struct {
     struct Window *win;
@@ -952,7 +952,7 @@ struct Library *CxBase;
 #define CX_ID_POP 1
 
 static struct NewBroker nb = {
-    NB_VERSION, (STRPTR)"AmiPortAtlas", (STRPTR)"AmiPortAtlas 0.3.0", (STRPTR)"Games: every game, where to get it, and play",
+    NB_VERSION, (STRPTR)"AmiPortAtlas", (STRPTR)"AmiPortAtlas 0.4.0", (STRPTR)"Games: every game, where to get it, and play",
     NBU_UNIQUE | NBU_NOTIFY, COF_SHOW_HIDE, 0, NULL, 0
 };
 
