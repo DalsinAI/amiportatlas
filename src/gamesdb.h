@@ -16,7 +16,7 @@
 #include "sources.h"
 #include "gamesfolders.h"
 
-#define GAMESDB_SCHEMA 2
+#define GAMESDB_SCHEMA 3
 #define GAMESDB_DRIVE  "Games:"
 #define GAMESDB_FILE   "Games:Atlas.db"   /* at the top of the Games drive, beside the launcher */
 
@@ -38,8 +38,12 @@ int  gamesdb_put_sources(GamesDb *db, const Sources *s);
  * is brought up to date and keeps what the machine knows of it (installed,
  * found, its drawer on disk); one the sources no longer list goes, unless
  * it is on this machine. All in one transaction: on failure the index is
- * as it was. Answers how many entries are listed, -1 on failure. */
+ * as it was. Answers how many entries are listed, -1 on failure. The same
+ * list as the last one put in (gamesdb_feed_mark, kept in meta) writes nothing. */
 int  gamesdb_put_feed(GamesDb *db, const Feed *f);
+
+/* Sixteen hex digits that change when anything the index keeps of the list does. */
+void gamesdb_feed_mark(const Feed *f, char out[17]);
 
 /* Today's date, "2026-11-17", for the New page: an entry that put_feed sees
  * for the first time gets it as first_seen, and one whose version changed
@@ -79,6 +83,15 @@ int  gamesdb_folder(GamesDb *db, const char *name);
  * Answers 1 when it matched a listed game, 0 when it made or kept a row of
  * its own, -1 on failure. */
 int  gamesdb_put_found(GamesDb *db, int folder, const char *drawer, const char *path, const char *program);
+
+/* Many put_found and set_installed calls as one transaction: on a floppy-speed
+ * Amiga drive each one alone is a write of the journal and the file. end
+ * keeps them (keep 1, answers 1 when they were written) or drops them. */
+int  gamesdb_begin(GamesDb *db);
+int  gamesdb_end(GamesDb *db, int keep);
+
+/* put_found's search, for the tests: in one of the five, or in any. */
+const char *gamesdb_found_sql(int in_folder);
 
 /* Each game on the drive that no source lists given to fn: its id, the name
  * of the drawer at the top of the drive it is in, its title and its own

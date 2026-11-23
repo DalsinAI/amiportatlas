@@ -33,7 +33,7 @@ static const char schema_sql[] =
     "CREATE INDEX games_by_news ON games (first_seen, updated);"
     "CREATE INDEX games_by_title ON games (title);"
     "CREATE INDEX games_by_folder ON games (folder, title);"
-    "CREATE INDEX games_by_drawer ON games (folder, drawer);"
+    "CREATE INDEX games_by_drawer ON games (drawer, folder);"   /* put_found asks by drawer, with or without folder */
     "CREATE TABLE shots (game TEXT NOT NULL, n INTEGER NOT NULL, url TEXT NOT NULL, PRIMARY KEY (game, n)) WITHOUT ROWID;"
     "CREATE TABLE needs (game TEXT NOT NULL, what TEXT NOT NULL, name TEXT NOT NULL,"
     " PRIMARY KEY (game, what, name)) WITHOUT ROWID;";
@@ -242,10 +242,58 @@ long gamesdb_new_since(GamesDb *db, const char *date)
     return n;
 }
 
+/* FNV-1a, 64 bits, over every field the index keeps: the same list gives
+ * the same mark, so an unchanged list is not written again. */
+static void mark_text(unsigned long long *h, const char *s)
+{
+    if (s) for (; *s; s++) { *h ^= (unsigned char)*s; *h *= 1099511628211ULL; }
+    *h ^= 0xFF; *h *= 1099511628211ULL;       /* the end of a field: "ab","c" is not "a","bc" */
+}
+
+static void mark_number(unsigned long long *h, long v)
+{
+    unsigned long u = (unsigned long)v;
+    int i;
+    for (i = 0; i < 4; i++) { *h ^= (u >> (8 * i)) & 0xFF; *h *= 1099511628211ULL; }   /* the same on every host */
+}
+
+static void mark_list(unsigned long long *h, char **names, int n)
+{
+    int i;
+    mark_number(h, n);
+    for (i = 0; i < n; i++) mark_text(h, names[i]);
+}
+
+void gamesdb_feed_mark(const Feed *f, char out[17])
+{
+    unsigned long long h = 14695981039346656037ULL;
+    int i;
+    mark_number(&h, f->count);
+    mark_text(&h, f->generated);
+    for (i = 0; i < f->count; i++) {
+        const Port *p = &f->ports[i];
+        mark_text(&h, p->id); mark_text(&h, p->source); mark_number(&h, games_folder_of(p)); mark_number(&h, p->number);
+        mark_text(&h, p->origin); mark_text(&h, p->kind); mark_text(&h, p->title); mark_text(&h, p->year);
+        mark_text(&h, p->state); mark_text(&h, p->fit); mark_text(&h, p->game_data); mark_text(&h, p->version);
+        mark_text(&h, p->summary); mark_text(&h, p->author); mark_text(&h, p->category); mark_text(&h, p->cpu);
+        mark_number(&h, p->fpu); mark_number(&h, p->space); mark_text(&h, p->download_url);
+        mark_number(&h, p->download_size); mark_text(&h, p->download_sha256); mark_text(&h, p->release_url);
+        mark_text(&h, p->port_repo); mark_text(&h, p->drawer); mark_text(&h, p->program); mark_text(&h, p->install);
+        mark_list(&h, p->shots, p->nshots); mark_list(&h, p->requires, p->nrequires); mark_list(&h, p->modules, p->nmodules);
+    }
+    snprintf(out, 17, "%08lx%08lx", (unsigned long)(h >> 32), (unsigned long)(h & 0xFFFFFFFFUL));
+}
+
 int gamesdb_put_feed(GamesDb *db, const Feed *f)
 {
     sqlite3_stmt *put = NULL, *shot = NULL, *need = NULL;
     int i, k, n = 0, ok = 0, dated;
+    char mark[17], was[24];
+    /* The same list as last time: nothing to write (lab, 23 Nov: writing 10,140
+     * entries again at every start took minutes on a slow drive). */
+    gamesdb_feed_mark(f, mark);
+    if (gamesdb_text(db, "SELECT value FROM meta WHERE key = 'feed'", was, (int)sizeof was) && strcmp(was, mark) == 0)
+        return (int)gamesdb_count_listed(db);
     /* The first fill of an empty index dates nothing. */
     dated = db->today[0] && gamesdb_count_listed(db) > 0;
     if (!run(db, "BEGIN")) return -1;
@@ -307,7 +355,7 @@ int gamesdb_put_feed(GamesDb *db, const Feed *f)
     if (!run(db, "DELETE FROM games WHERE listed = 0 AND id NOT LIKE 'disk:%'"
                  " AND installed_version IS NULL AND found = 0")) goto done;
     {
-        char *q = sqlite3_mprintf("INSERT OR REPLACE INTO meta VALUES ('generated', %Q)", f->generated);
+        char *q = sqlite3_mprintf("INSERT OR REPLACE INTO meta VALUES ('generated', %Q), ('feed', %Q)", f->generated, mark);
         ok = q && run(db, q);
         sqlite3_free(q);
     }
@@ -395,15 +443,30 @@ static int folder_name(GamesDb *db, int folder, char *out, int max)
     return got;
 }
 
+#define FOUND_SET "UPDATE games SET found = 1, path = ?3, found_program = ?4 WHERE id = (SELECT id FROM games WHERE "
+#define FOUND_PICK " AND listed = 1 ORDER BY (source = '" ATLAS_SOURCE "') DESC, id LIMIT 1)"
+#define FOUND_IN_FOLDER FOUND_SET "drawer = ?2 AND folder = ?1" FOUND_PICK
+#define FOUND_ANYWHERE  FOUND_SET "drawer = ?2 AND ?1 >= 0" FOUND_PICK
+
+const char *gamesdb_found_sql(int in_folder) { return in_folder ? FOUND_IN_FOLDER : FOUND_ANYWHERE; }
+
+int gamesdb_begin(GamesDb *db) { return run(db, "BEGIN"); }
+
+int gamesdb_end(GamesDb *db, int keep)
+{
+    if (keep && run(db, "COMMIT")) return 1;
+    sqlite3_exec(db->sql, "ROLLBACK", NULL, NULL, NULL);
+    return 0;
+}
+
 int gamesdb_put_found(GamesDb *db, int folder, const char *drawer, const char *path, const char *program)
 {
     sqlite3_stmt *st;
     char id[200], low[120], in[64];
     int i, n;
     if (folder < 0 || !drawer || !*drawer || !path || !folder_name(db, folder, in, (int)sizeof in)) return -1;
-    if (sqlite3_prepare_v2(db->sql, "UPDATE games SET found = 1, path = ?3, found_program = ?4 WHERE id ="
-                           " (SELECT id FROM games WHERE (folder = ?1 OR ?1 >= " GF_COUNT_TEXT ") AND listed = 1 AND drawer = ?2"
-                           "  ORDER BY (source = '" ATLAS_SOURCE "') DESC, id LIMIT 1)", -1, &st, NULL) != SQLITE_OK) {
+    /* Two forms rather than "folder = ?1 OR ?1 >= 5", which SQLite answers by reading every row. */
+    if (sqlite3_prepare_v2(db->sql, folder < GF_COUNT ? FOUND_IN_FOLDER : FOUND_ANYWHERE, -1, &st, NULL) != SQLITE_OK) {
         fail(db);
         return -1;
     }

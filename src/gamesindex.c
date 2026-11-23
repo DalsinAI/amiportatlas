@@ -107,6 +107,7 @@ int games_index_make(const char *drive, const char *file, const Feed *f, const S
     today[0] = 0;
     if (date_ago(0, today)) gamesdb_set_today(db, today);
     if (!gamesdb_put_sources(db, s) || (r->listed = gamesdb_put_feed(db, f)) < 0 || !gamesdb_clear_found(db)) goto bad;
+    if (!gamesdb_begin(db)) goto bad;           /* what is on this machine, written once (each alone: minutes) */
     for (i = 0; i < f->count; i++) {
         const Port *p = &f->ports[i];
         if (p->id && installed_version(p) && !installed_found(p))
@@ -122,11 +123,13 @@ int games_index_make(const char *drive, const char *file, const Feed *f, const S
         if (folder < GF_COUNT) r->on_drive[folder] += n;
         else { r->other_drawers++; r->on_drive_other += n; }
     }
+    if (!gamesdb_end(db, 1)) goto bad;
     for (i = 0; i < GF_COUNT; i++) r->listed_in[i] = gamesdb_count(db, i, 0);
     gamesdb_close(db);
     return 1;
 bad:
     snprintf(why, (size_t)whylen, "The games index %s: %s", file, gamesdb_error(db));
+    gamesdb_end(db, 0);                         /* none open: nothing happens */
     gamesdb_close(db);
     return 0;
 }
